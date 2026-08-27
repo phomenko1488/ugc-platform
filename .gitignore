@@ -1,0 +1,26 @@
+# OS / macOS
+.DS_Store
+.DS_Store?
+._*
+
+# IDE & Editors
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Backend (ugc_back)
+ugc_back/target/
+ugc_back/.mvn/wrapper/maven-wrapper.jar
+ugc_back/*.class
+ugc_back/*.log
+
+# Frontend (ugc-client)
+ugc-client/node_modules/
+ugc-client/dist/
+ugc-client/.vite/
+ugc-client/build/
+ugc-client/npm-debug.log*
+ugc-client/yarn-debug.log*
+ugc-client/yarn-error.log*
