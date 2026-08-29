@@ -1,7 +1,7 @@
 import React from 'react';
-import { Video, ShieldCheck, UserCheck, Briefcase, RefreshCw } from 'lucide-react';
+import { Video, ShieldCheck, UserCheck, Briefcase, RefreshCw, LogOut } from 'lucide-react';
 
-export default function Header({ activeUser, onRefresh, activeRole, onChangeRole }) {
+export default function Header({ activeUser, onRefresh, activeRole, onChangeRole, onLogout }) {
     return (
         <header className="border-b border-brand-border bg-brand-card/90 backdrop-blur sticky top-0 z-50">
             <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -64,6 +64,16 @@ export default function Header({ activeUser, onRefresh, activeRole, onChangeRole
                     >
                         <RefreshCw className="w-4 h-4" />
                     </button>
+
+                    {onLogout && (
+                        <button
+                            onClick={onLogout}
+                            title="Выйти"
+                            className="p-2 rounded-lg border border-brand-border text-slate-400 hover:text-brand-danger hover:border-brand-danger/40 bg-brand-bg/50 transition-colors"
+                        >
+                            <LogOut className="w-4 h-4" />
+                        </button>
+                    )}
 
                     {activeUser && (
                         <div className="flex items-center gap-3 pl-3 border-l border-brand-border">

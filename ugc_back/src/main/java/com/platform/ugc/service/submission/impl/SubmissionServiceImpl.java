@@ -171,7 +171,8 @@ public class SubmissionServiceImpl implements SubmissionService {
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена: " + submissionId));
 
         if (submission.getStatus() != Submission.Status.PENDING_REVIEW &&
-                submission.getStatus() != Submission.Status.TRACKING) {
+                submission.getStatus() != Submission.Status.TRACKING &&
+                submission.getStatus() != Submission.Status.DISPUTED) {
             throw new IllegalStateException("Некорректный статус для одобрения: " + submission.getStatus());
         }
 
@@ -207,5 +208,37 @@ public class SubmissionServiceImpl implements SubmissionService {
         submission.setStatus(Submission.Status.REJECTED);
         submission.setModerationComment(rejectionReason);
         submissionRepository.save(submission);
+    }
+
+    @Override
+    @Transactional
+    public void disputeSubmission(Long submissionId, Long advertiserId, String category, String comment) {
+        Submission submission = submissionRepository.findByIdWithLock(submissionId)
+                .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена: " + submissionId));
+
+        if (!submission.getOffer().getAdvertiser().getId().equals(advertiserId)) {
+            throw new AccessDeniedException("Нет доступа к этой заявке.");
+        }
+
+        if (submission.getStatus() == Submission.Status.REJECTED
+                || submission.getStatus() == Submission.Status.PAID
+                || submission.getStatus() == Submission.Status.DISPUTED) {
+            throw new IllegalStateException("Нельзя оспорить заявку в статусе: " + submission.getStatus());
+        }
+
+        submission.setStatus(Submission.Status.DISPUTED);
+        submission.setDisputeCategory(category);
+        submission.setDisputeComment(comment);
+        submission.setDisputedAt(Instant.now());
+        submissionRepository.save(submission);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SubmissionResponseDTO> getAdvertiserTraffic(Long advertiserId, Submission.Status statusFilter) {
+        return submissionRepository.findAllByOffer_AdvertiserIdOrderByCreatedAtDesc(advertiserId).stream()
+                .filter(s -> statusFilter == null || s.getStatus() == statusFilter)
+                .map(SubmissionResponseDTO::fromEntity)
+                .toList();
     }
 }

@@ -1,5 +1,6 @@
 package com.platform.ugc.model.finance;
 
+import com.platform.ugc.model.offer.Offer;
 import com.platform.ugc.model.submission.Submission;
 import com.platform.ugc.model.user.User;
 import jakarta.persistence.*;
@@ -23,7 +24,8 @@ public class FinancialLedgerEntry {
         B2B_PARTNER_COMMISSION,
         PLATFORM_NET_PROFIT,
         ADVERTISER_DEPOSIT,
-        WORKER_WITHDRAWAL
+        WORKER_WITHDRAWAL,
+        ADVERTISER_BUDGET_REFUND
     }
 
     @Id
@@ -38,12 +40,19 @@ public class FinancialLedgerEntry {
     @JoinColumn(name = "submission_id")
     private Submission submission;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "offer_id")
+    private Offer offer;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private EntryType entryType;
 
     @Column(nullable = false, precision = 16, scale = 4)
     private BigDecimal amount;
+
+    @Column(name = "recorded_views")
+    private Long recordedViews;
 
     @Column(nullable = false, length = 255)
     private String description;
@@ -54,5 +63,9 @@ public class FinancialLedgerEntry {
     @PrePersist
     protected void onCreate() {
         this.createdAt = Instant.now();
+    }
+
+    public EntryType getType() {
+        return this.entryType;
     }
 }

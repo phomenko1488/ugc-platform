@@ -25,7 +25,7 @@ import java.util.Objects;
 public class Submission {
 
     public enum Status {
-        TRACKING, PENDING_REVIEW, APPROVED, REJECTED, PAID
+        TRACKING, PENDING_REVIEW, APPROVED, REJECTED, PAID, DISPUTED
     }
 
     @Id
@@ -81,6 +81,19 @@ public class Submission {
 
     @Column(length = 512)
     private String moderationComment;
+
+    // Dispute Flow (Advertiser Cabinet, Инспектор трафика): an advertiser flagging a submission
+    // as fraud/ToS-violation/wrong-geo moves it to Status.DISPUTED instead of rejecting it
+    // outright, pausing any future auto-release-of-hold job (none exists in this codebase yet,
+    // but any that gets added later should skip DISPUTED rows) until a moderator resolves it via
+    // the existing approve/reject flow. Left populated after resolution as an audit trail.
+    @Column(length = 64)
+    private String disputeCategory;
+
+    @Column(length = 512)
+    private String disputeComment;
+
+    private Instant disputedAt;
 
     @Column(nullable = false, precision = 14, scale = 4)
     @Builder.Default

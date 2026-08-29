@@ -19,6 +19,9 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     List<Submission> findAllByWorkerIdOrderByCreatedAtDesc(Long workerId);
     List<Submission> findAllByOfferIdOrderByCreatedAtDesc(Long offerId);
     List<Submission> findAllByStatusOrderByCreatedAtAsc(Submission.Status status);
+    // Advertiser Cabinet: every submission across all of one advertiser's offers, for the
+    // dashboard's aggregates/timeline/top-videos and the traffic inspector's registry.
+    List<Submission> findAllByOffer_AdvertiserIdOrderByCreatedAtDesc(Long advertiserId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Submission s WHERE s.id = :id")

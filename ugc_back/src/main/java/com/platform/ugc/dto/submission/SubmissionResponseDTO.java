@@ -21,6 +21,9 @@ public record SubmissionResponseDTO(
         String analyticsProofAssetUrl,
         Submission.Status status,
         String moderationComment,
+        String disputeCategory,
+        String disputeComment,
+        Instant disputedAt,
         BigDecimal holdAmount,
         Instant holdExpiresAt,
         Instant createdAt
@@ -42,6 +45,9 @@ public record SubmissionResponseDTO(
                 s.getAnalyticsProofAssetUrl(),
                 s.getStatus(),
                 s.getModerationComment(),
+                s.getDisputeCategory(),
+                s.getDisputeComment(),
+                s.getDisputedAt(),
                 s.getHoldAmount(),
                 s.getHoldExpiresAt(),
                 s.getCreatedAt()

@@ -116,6 +116,8 @@ public class FinancialSettlementEngine {
         ledgerRepository.save(FinancialLedgerEntry.builder()
                 .user(user)
                 .submission(submission)
+                .offer(submission != null ? submission.getOffer() : null)
+                .recordedViews(submission != null ? submission.getRecordedViews() : null)
                 .entryType(type)
                 .amount(amount)
                 .description(desc)

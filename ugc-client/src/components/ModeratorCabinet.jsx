@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { ShieldCheck, CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, XCircle, ExternalLink, X, ZoomIn } from 'lucide-react';
 import { api } from '../api';
 
 export default function ModeratorCabinet({ queue, onRefresh }) {
     const [activeItem, setActiveItem] = useState(queue[0] || null);
     const [rejectReason, setRejectReason] = useState('Не обнаружен логотип бренда в видео');
     const [actionLoading, setActionLoading] = useState(false);
+    const [zoomImageUrl, setZoomImageUrl] = useState(null);
 
     const handleApprove = async (id) => {
         try {
@@ -133,11 +134,20 @@ export default function ModeratorCabinet({ queue, onRefresh }) {
                             {activeItem.analyticsProofAssetUrl && (
                                 <div>
                                     <div className="text-xs font-semibold text-slate-300 mb-2">Скриншот ГЕО аналитики:</div>
-                                    <img
-                                        src={activeItem.analyticsProofAssetUrl}
-                                        alt="Analytics proof"
-                                        className="rounded-xl border border-brand-border max-h-48 w-full object-cover"
-                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setZoomImageUrl(activeItem.analyticsProofAssetUrl)}
+                                        className="relative group w-full block"
+                                    >
+                                        <img
+                                            src={activeItem.analyticsProofAssetUrl}
+                                            alt="Analytics proof"
+                                            className="rounded-xl border border-brand-border max-h-48 w-full object-cover"
+                                        />
+                                        <div className="absolute inset-0 rounded-xl bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-colors">
+                                            <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </div>
+                                    </button>
                                 </div>
                             )}
 
@@ -176,6 +186,27 @@ export default function ModeratorCabinet({ queue, onRefresh }) {
                         </div>
                     )}
 
+                </div>
+            )}
+
+            {zoomImageUrl && (
+                <div
+                    className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
+                    onClick={() => setZoomImageUrl(null)}
+                >
+                    <button
+                        type="button"
+                        onClick={() => setZoomImageUrl(null)}
+                        className="absolute top-5 right-5 p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                    <img
+                        src={zoomImageUrl}
+                        alt="Analytics proof (full size)"
+                        onClick={(e) => e.stopPropagation()}
+                        className="max-w-full max-h-full rounded-xl border border-white/10 object-contain cursor-zoom-out"
+                    />
                 </div>
             )}
 

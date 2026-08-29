@@ -12,6 +12,7 @@ import com.platform.ugc.repository.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,10 @@ public class DataInitializer implements CommandLineRunner {
     private final GeoCountryRepository geoCountryRepository;
     private final UserRepository userRepository;
     private final OfferRepository offerRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    // Dev-only default password for every seeded email/password user (Module 1). Never do this in prod.
+    private static final String DEV_SEED_PASSWORD = "password123";
 
     @Override
     @Transactional
@@ -67,6 +72,7 @@ public class DataInitializer implements CommandLineRunner {
             User advertiser = userRepository.save(User.builder()
                     .username("Stake_Admin")
                     .email("adv@stake.com")
+                    .passwordHash(passwordEncoder.encode(DEV_SEED_PASSWORD))
                     .availableBalance(new BigDecimal("10000.0000"))
                     .affiliateTag("adv_stake")
                     .roles(new HashSet<>(Collections.singleton(Role.ROLE_ADVERTISER)))
@@ -84,6 +90,7 @@ public class DataInitializer implements CommandLineRunner {
             userRepository.save(User.builder()
                     .username("Mod_Chief")
                     .email("mod@platform.com")
+                    .passwordHash(passwordEncoder.encode(DEV_SEED_PASSWORD))
                     .roles(new HashSet<>(Collections.singleton(Role.ROLE_MODERATOR)))
                     .affiliateTag("mod_001")
                     .build());
@@ -105,7 +112,7 @@ public class DataInitializer implements CommandLineRunner {
                     .isActive(true)
                     .build());
 
-            log.info("Сидинг успешно завершен.");
+            log.info("Сидинг успешно завершен. Dev-логин: adv@stake.com / mod@platform.com, пароль: {}", DEV_SEED_PASSWORD);
         }
     }
 }

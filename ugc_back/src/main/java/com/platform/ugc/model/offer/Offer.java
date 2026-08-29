@@ -68,23 +68,21 @@ public class Offer {
     @Builder.Default
     private Boolean isActive = true;
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "offer_platforms",
             joinColumns = @JoinColumn(name = "offer_id"),
             inverseJoinColumns = @JoinColumn(name = "platform_id")
     )
-    @Builder.Default
-    private Set<PlatformEntity> allowedPlatforms = new HashSet<>();
+    private Set<PlatformEntity> allowedPlatforms;
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "offer_target_geos",
             joinColumns = @JoinColumn(name = "offer_id"),
             inverseJoinColumns = @JoinColumn(name = "geo_id")
     )
-    @Builder.Default
-    private Set<GeoCountry> targetGeos = new HashSet<>();
+    private Set<GeoCountry> targetGeos;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

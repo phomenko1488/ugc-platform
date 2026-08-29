@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Send, Copy, Check, ExternalLink, AlertCircle, Sparkles } from 'lucide-react';
 import { api } from '../api';
+import FileUploader from './FileUploader';
 
 export default function WorkerCabinet({ worker, offers, submissions, onRefresh }) {
     const [copied, setCopied] = useState(false);
@@ -201,13 +202,10 @@ export default function WorkerCabinet({ worker, offers, submissions, onRefresh }
                             </div>
 
                             <div>
-                                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Скриншот аналитики ГЕО (URL)</label>
-                                <input
-                                    type="url"
-                                    placeholder="https://i.imgur.com/example.png"
+                                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Скриншот аналитики ГЕО</label>
+                                <FileUploader
                                     value={form.screenshotAssetUrl}
-                                    onChange={(e) => setForm({ ...form, screenshotAssetUrl: e.target.value })}
-                                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent placeholder:text-slate-600 font-mono"
+                                    onUploaded={(url) => setForm({ ...form, screenshotAssetUrl: url })}
                                 />
                             </div>
 

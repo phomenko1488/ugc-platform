@@ -1,6 +1,7 @@
 package com.platform.ugc.controller.submission;
 
 import com.platform.ugc.dto.ResponseDTO;
+import com.platform.ugc.dto.submission.DisputeRequestDTO;
 import com.platform.ugc.dto.submission.SubmissionCreateRequestDTO;
 import com.platform.ugc.dto.submission.SubmissionResponseDTO;
 import com.platform.ugc.model.submission.Submission;
@@ -47,5 +48,15 @@ public class SubmissionController {
     @GetMapping("/{id}")
     public ResponseEntity<ResponseDTO<SubmissionResponseDTO>> getById(@PathVariable Long id) {
         return ResponseEntity.ok(ResponseDTO.ok(submissionService.getSubmissionDetails(id)));
+    }
+
+    @PostMapping("/{submissionId}/dispute")
+    public ResponseEntity<ResponseDTO<Void>> disputeSubmission(
+            @PathVariable Long submissionId,
+            @RequestParam Long advertiserId,
+            @Valid @RequestBody DisputeRequestDTO request
+    ) {
+        submissionService.disputeSubmission(submissionId, advertiserId, request.reason(), request.comment());
+        return ResponseEntity.ok(ResponseDTO.ok("Заявка отправлена на пересмотр модератором", null));
     }
 }
