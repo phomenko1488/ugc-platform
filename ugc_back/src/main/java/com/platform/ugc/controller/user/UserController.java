@@ -9,6 +9,7 @@ import com.platform.ugc.model.user.B2BPartnerTerms;
 import com.platform.ugc.model.user.ReferralTerms;
 import com.platform.ugc.model.user.Role;
 import com.platform.ugc.model.user.User;
+import com.platform.ugc.repository.user.UserRepository;
 import com.platform.ugc.service.auth.OneTimeTokenService;
 import com.platform.ugc.service.user.UserService;
 import jakarta.validation.Valid;
@@ -16,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
@@ -29,6 +31,7 @@ public class UserController {
 
     private final UserService userService;
     private final OneTimeTokenService oneTimeTokenService;
+    private final UserRepository userRepository;
 
     @Value("${telegram.bot.username:ugc_flow_bot}")
     private String telegramBotUsername;
@@ -116,5 +119,27 @@ public class UserController {
     ) {
         userService.updateCustomB2BTerms(id, terms);
         return ResponseEntity.ok(ResponseDTO.ok("B2B условия обновлены", null));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<ResponseDTO> getCurrentUser(Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            return ResponseEntity.status(401).build();
+        }
+
+        String principal = authentication.getName();
+        User user = userRepository.findByEmail(principal)
+                .or(() -> userRepository.findByEmail(principal))
+                .or(() -> {
+                    try {
+                        Long tgId = Long.parseLong(principal.replace("tg:", ""));
+                        return userRepository.findByTelegramId(tgId);
+                    } catch (Exception e) {
+                        return java.util.Optional.empty();
+                    }
+                })
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден: " + principal));
+
+        return ResponseEntity.ok(ResponseDTO.ok(UserResponseDTO.fromEntity(userService.getById(user.getId()))));
     }
 }

@@ -1,24 +1,16 @@
 import React, {useState, useEffect, useCallback} from 'react';
 import Header from './components/Header';
-// import ModeratorLayout from './modules/moderator/ModeratorLayout';
 import LoginModal from './components/LoginModal';
 import WorkerLayout from './modules/worker/WorkerLayout';
 import AdvertiserLayout from './modules/advertiser/AdvertiserLayout';
 import PartnerLayout from './modules/partner/PartnerLayout';
 import AdminLayout from './modules/admin/AdminLayout';
+import ModeratorLayout from "./modules/moderator/ModeratorLayout.jsx";
 import {api, authStorage, registerUnauthorizedHandler, decodeAccessTokenRoles} from './api';
 import {Loader2, AlertTriangle, RefreshCw} from 'lucide-react';
-
-// @twa-dev/sdk degrades gracefully outside an actual Telegram client (initData is just empty),
-// so it's safe to import unconditionally rather than feature-detecting window.Telegram ourselves.
 import WebApp from '@twa-dev/sdk';
-import ModeratorLayout from "./modules/moderator/ModeratorLayout.jsx";
 
 export default function App() {
-    // --- Module 1: auth gating ---
-    // 'checking' -> attempting Telegram auto-login / reading existing session
-    // 'authenticated' -> we have a JWT, cabinets can load
-    // 'anonymous' -> no Telegram session and no stored JWT, show LoginModal
     const [authStatus, setAuthStatus] = useState('checking');
     const [authError, setAuthError] = useState(null);
 
@@ -27,7 +19,6 @@ export default function App() {
     const [activeUser, setActiveUser] = useState(null);
 
     const [offers, setOffers] = useState([]);
-
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -36,12 +27,8 @@ export default function App() {
         setAuthStatus('anonymous');
     }, []);
 
-    // Picks which cabinet a freshly-authenticated session should land on, from the JWT's own
-    // roles claim — instead of always defaulting to Worker regardless of who actually logged in.
-    const applyRoleFromToken = () => {
-        const roles = decodeAccessTokenRoles();
-        // ROLE_ADMIN checked first: an admin should always land on the Back-Office, even if their
-        // account also happens to carry another role.
+    const applyRoleFromUser = (roles) => {
+        if (!roles || !roles.length) return;
         if (roles.includes('ROLE_ADMIN')) setActiveRole('ADMIN');
         else if (roles.includes('ROLE_WORKER')) setActiveRole('WORKER');
         else if (roles.includes('ROLE_ADVERTISER')) setActiveRole('ADVERTISER');
@@ -49,8 +36,11 @@ export default function App() {
         else if (roles.includes('ROLE_PARTNER')) setActiveRole('PARTNER');
     };
 
-    // Bootstrap: try an existing session first, then Telegram WebApp auto-login, then fall back
-    // to the desktop login modal.
+    const applyRoleFromToken = () => {
+        const roles = decodeAccessTokenRoles();
+        applyRoleFromUser(roles);
+    };
+
     useEffect(() => {
         registerUnauthorizedHandler(handleUnauthenticated);
 
@@ -64,7 +54,7 @@ export default function App() {
             try {
                 WebApp.ready();
             } catch {
-                // Not running inside Telegram — expected on desktop.
+                // desktop no-op
             }
 
             const initData = WebApp?.initData;
@@ -76,7 +66,7 @@ export default function App() {
                     setAuthStatus('authenticated');
                     return;
                 } catch (err) {
-                    setAuthError(err.message || 'Не удалось войти через Telegram');
+                    setAuthError(err.message || 'Ошибка авторизации через Telegram');
                 }
             }
 
@@ -90,47 +80,17 @@ export default function App() {
         try {
             setError(null);
 
-            // 1. Получаем профиль именно авторизованного пользователя через /users/me
-            let currentUser = null;
-            try {
-                currentUser = await api.getMe();
-            } catch (e) {
-                console.warn('Не удалось загрузить /users/me, пробуем фолбэк по токену', e);
+            // Загружаем профиль строго текущего пользователя по токену
+            const me = await api.getMe();
+            if (!me || !me.id) {
+                throw new Error("Не удалось загрузить профиль текущего пользователя");
             }
+            console.log(me)
+            setActiveUser(me);
+            applyRoleFromUser(me.roles);
 
-            // 2. Фолбэк, если эндпоинт /users/me недоступен
-            if (!currentUser) {
-                const allUsers = await api.getUsers();
-                setUsers(allUsers || []);
-                const tokenData = decodeAccessTokenRoles();
-                currentUser = (allUsers || []).find(u => {
-                    if (activeRole === 'WORKER') return u.roles?.includes('ROLE_WORKER');
-                    if (activeRole === 'ADVERTISER') return u.roles?.includes('ROLE_ADVERTISER');
-                    if (activeRole === 'MODERATOR') return u.roles?.includes('ROLE_MODERATOR');
-                    if (activeRole === 'PARTNER') return u.roles?.includes('ROLE_PARTNER');
-                    if (activeRole === 'ADMIN') return u.roles?.includes('ROLE_ADMIN');
-                    return false;
-                }) || allUsers[0];
-            }
-
-            if (!currentUser) {
-                throw new Error("Не удалось определить активного пользователя");
-            }
-
-            setActiveUser(currentUser);
-
-            // 3. Загружаем офферы под ID реального воркера
-            const activeOffers = await api.getActiveOffers(currentUser.id);
+            const activeOffers = await api.getActiveOffers(me.id);
             setOffers(activeOffers?.content || activeOffers || []);
-
-            // 4. Синхронизируем роль из данных профиля
-            if (currentUser.roles && currentUser.roles.length > 0) {
-                if (currentUser.roles.includes('ROLE_ADMIN')) setActiveRole('ADMIN');
-                else if (currentUser.roles.includes('ROLE_WORKER')) setActiveRole('WORKER');
-                else if (currentUser.roles.includes('ROLE_ADVERTISER')) setActiveRole('ADVERTISER');
-                else if (currentUser.roles.includes('ROLE_MODERATOR')) setActiveRole('MODERATOR');
-                else if (currentUser.roles.includes('ROLE_PARTNER')) setActiveRole('PARTNER');
-            }
         } catch (err) {
             console.error('Ошибка загрузки данных:', err);
             setError(err.message || 'Ошибка подключения к серверу');
@@ -143,7 +103,7 @@ export default function App() {
         if (authStatus === 'authenticated') {
             loadData();
         }
-    }, [activeRole, authStatus]);
+    }, [authStatus]);
 
     if (authStatus === 'checking') {
         return (
@@ -178,10 +138,9 @@ export default function App() {
     if (error && !activeUser) {
         return (
             <div className="min-h-screen bg-[#090d16] flex flex-col items-center justify-center p-4">
-                <div
-                    className="bg-red-500/10 border border-red-500/30 p-6 rounded-2xl max-w-md w-full text-center space-y-4">
+                <div className="bg-red-500/10 border border-red-500/30 p-6 rounded-2xl max-w-md w-full text-center space-y-4">
                     <AlertTriangle className="w-10 h-10 text-red-400 mx-auto"/>
-                    <h2 className="text-lg font-bold text-white">Ошибка подключения к API</h2>
+                    <h2 className="text-lg font-bold text-white">Ошибка API</h2>
                     <p className="text-xs text-red-300 font-mono">{error}</p>
                     <button
                         onClick={() => {
@@ -203,7 +162,6 @@ export default function App() {
         setAuthStatus('anonymous');
     };
 
-    // Воркер: полностью изолированный модуль
     if (activeRole === 'WORKER' && activeUser) {
         return (
             <WorkerLayout
@@ -215,7 +173,6 @@ export default function App() {
         );
     }
 
-    // Рекламодатель: полностью изолированный модуль
     if (activeRole === 'ADVERTISER' && activeUser) {
         return (
             <AdvertiserLayout
@@ -226,7 +183,6 @@ export default function App() {
         );
     }
 
-    // Модератор: полностью изолированный модуль
     if (activeRole === 'MODERATOR' && activeUser) {
         return (
             <ModeratorLayout
@@ -236,7 +192,6 @@ export default function App() {
         );
     }
 
-    // B2B-партнер: полностью изолированный модуль
     if (activeRole === 'PARTNER' && activeUser) {
         return (
             <PartnerLayout
@@ -247,7 +202,6 @@ export default function App() {
         );
     }
 
-    // Администратор: полностью изолированный модуль (Back-Office)
     if (activeRole === 'ADMIN' && activeUser) {
         return (
             <AdminLayout
@@ -258,7 +212,6 @@ export default function App() {
         );
     }
 
-    // Fallback для переключения ролей в dev-режиме
     return (
         <div className="min-h-screen bg-brand-bg text-slate-100 flex flex-col">
             <Header
@@ -270,8 +223,7 @@ export default function App() {
                 onLogout={handleLogout}
             />
             <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
-                <div
-                    className="bg-brand-card border border-brand-border p-8 rounded-2xl text-center text-slate-400 text-xs">
+                <div className="bg-brand-card border border-brand-border p-8 rounded-2xl text-center text-slate-400 text-xs">
                     Выберите активную роль в панели выше
                 </div>
             </main>
