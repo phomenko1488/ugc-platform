@@ -1,15 +1,17 @@
 package com.platform.ugc.service.finance;
 
+import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.finance.FinancialLedgerResponseDTO;
 import com.platform.ugc.model.finance.FinancialLedgerEntry;
 import com.platform.ugc.repository.finance.FinancialLedgerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -18,11 +20,14 @@ public class FinancialLedgerQueryService {
 
     private final FinancialLedgerRepository ledgerRepository;
 
+    // Pagination initiative — the wallet's "История начислений" tab (Worker/Advertiser/Partner
+    // cabinets alike), previously a bare unpaginated array.
     @Transactional(readOnly = true)
-    public List<FinancialLedgerResponseDTO> getLedgerForUser(Long userId) {
-        return ledgerRepository.findAllByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+    public PageResponseDTO<FinancialLedgerResponseDTO> getLedgerForUser(Long userId, int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<FinancialLedgerEntry> entries = ledgerRepository.findAllByUserId(userId, pageable);
+        return PageResponseDTO.of(entries.map(this::toDto));
     }
 
     private FinancialLedgerResponseDTO toDto(FinancialLedgerEntry entry) {

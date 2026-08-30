@@ -1,6 +1,7 @@
 package com.platform.ugc.controller.offer;
 
 import com.platform.ugc.dto.ResponseDTO;
+import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.offer.OfferCreateRequestDTO;
 import com.platform.ugc.dto.offer.OfferResponseDTO;
 import com.platform.ugc.model.offer.Offer;
@@ -37,8 +38,12 @@ public class OfferController {
     }
 
     @GetMapping("/advertiser/{advertiserId}")
-    public ResponseEntity<ResponseDTO<List<OfferResponseDTO>>> getOffersByAdvertiser(@PathVariable Long advertiserId) {
-        return ResponseEntity.ok(ResponseDTO.ok(offerService.getOffersByAdvertiser(advertiserId)));
+    public ResponseEntity<ResponseDTO<PageResponseDTO<OfferResponseDTO>>> getOffersByAdvertiser(
+            @PathVariable Long advertiserId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(ResponseDTO.ok(offerService.getOffersByAdvertiser(advertiserId, page, size)));
     }
 
     @GetMapping("/{id}")

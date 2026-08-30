@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Wallet, Send, ExternalLink, Loader2, CheckCircle2, Clock, XCircle, Eye, Film } from 'lucide-react';
 import { api } from '../../../api';
+import Pagination from '../../../components/Pagination';
 
 const LEDGER_TYPE_LABELS = {
     WORKER_HOLD_ACCRUAL: 'Начисление в холд',
@@ -29,21 +30,37 @@ export default function WorkerWalletPage({ worker, onRefresh }) {
     const [payoutError, setPayoutError] = useState(null);
     const [payoutSuccess, setPayoutSuccess] = useState(null);
 
-    const [payoutHistory, setPayoutHistory] = useState(null); // null = loading, [] = loaded empty, undefined = unavailable
-    const [ledger, setLedger] = useState(null);
+    // null = loading, undefined = unavailable, PageResponseDTO once loaded (same tri-state
+    // convention this page always used, now carrying a page object instead of a bare array).
+    const [payoutHistoryPage, setPayoutHistoryPage] = useState(null);
+    const [payoutPageNum, setPayoutPageNum] = useState(0);
+    const [payoutPageSize, setPayoutPageSize] = useState(10);
+
+    const [ledgerPage, setLedgerPage] = useState(null);
+    const [ledgerPageNum, setLedgerPageNum] = useState(0);
+    const [ledgerPageSize, setLedgerPageSize] = useState(20);
+
+    const payoutHistory = payoutHistoryPage === null ? null : payoutHistoryPage === undefined ? undefined : payoutHistoryPage.content;
+    const ledger = ledgerPage === null ? null : ledgerPage === undefined ? undefined : ledgerPage.content;
 
     useEffect(() => {
         if (!worker?.id) return;
+        api.getPayoutHistory(worker.id, payoutPageNum, payoutPageSize)
+            .then(setPayoutHistoryPage)
+            .catch(() => setPayoutHistoryPage(undefined)); // Degrade quietly on any fetch failure rather than crashing the page.
+    }, [worker?.id, payoutPageNum, payoutPageSize]);
 
-        api.getPayoutHistory(worker.id)
-            .then(setPayoutHistory)
-            .catch(() => setPayoutHistory(undefined)); // Module 5 backend not deployed yet — degrade quietly.
+    useEffect(() => {
+        if (!worker?.id) return;
+        api.getFinancialLedger(worker.id, ledgerPageNum, ledgerPageSize)
+            .then(setLedgerPage)
+            .catch(() => setLedgerPage(undefined));
+    }, [worker?.id, ledgerPageNum, ledgerPageSize]);
 
-        api.getFinancialLedger(worker.id)
-            .then(setLedger)
-            .catch(() => setLedger(undefined));
-    }, [worker?.id]);
-
+    // "Выплачено всего" — now scoped to the currently loaded page of payout history rather than
+    // a true lifetime sum: the pagination initiative moved getPayoutHistory off a full flat array,
+    // and the User entity has no running total-paid-out counter to sum against instead. A backend
+    // aggregate would be needed for a true lifetime figure; flagged as a known trade-off.
     const totalPaidOut = Array.isArray(payoutHistory)
         ? payoutHistory.filter((p) => p.status === 'COMPLETED').reduce((sum, p) => sum + Number(p.amount || 0), 0)
         : null;
@@ -94,7 +111,8 @@ export default function WorkerWalletPage({ worker, onRefresh }) {
             setPayoutSuccess('Заявка на вывод создана и отправлена на обработку');
             setAmount('');
             onRefresh?.();
-            api.getPayoutHistory(worker.id).then(setPayoutHistory).catch(() => {});
+            setPayoutPageNum(0);
+            api.getPayoutHistory(worker.id, 0, payoutPageSize).then(setPayoutHistoryPage).catch(() => {});
         } catch (err) {
             setPayoutError(err.message || 'Не удалось создать заявку на вывод');
         } finally {
@@ -245,6 +263,17 @@ export default function WorkerWalletPage({ worker, onRefresh }) {
                 )}
             </div>
 
+            {payoutHistoryPage && (
+                <Pagination
+                    currentPage={payoutHistoryPage.pageNumber}
+                    totalPages={payoutHistoryPage.totalPages}
+                    totalElements={payoutHistoryPage.totalElements}
+                    pageSize={payoutPageSize}
+                    onPageChange={setPayoutPageNum}
+                    onPageSizeChange={(size) => { setPayoutPageSize(size); setPayoutPageNum(0); }}
+                />
+            )}
+
             <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
                 <h3 className="text-sm font-bold text-white px-5 pt-5 pb-3">История начислений</h3>
                 {ledger === null && <div className="px-5 pb-5 text-xs text-slate-500">Загрузка...</div>}
@@ -309,6 +338,17 @@ export default function WorkerWalletPage({ worker, onRefresh }) {
                     </div>
                 )}
             </div>
+
+            {ledgerPage && (
+                <Pagination
+                    currentPage={ledgerPage.pageNumber}
+                    totalPages={ledgerPage.totalPages}
+                    totalElements={ledgerPage.totalElements}
+                    pageSize={ledgerPageSize}
+                    onPageChange={setLedgerPageNum}
+                    onPageSizeChange={(size) => { setLedgerPageSize(size); setLedgerPageNum(0); }}
+                />
+            )}
         </div>
     );
 }

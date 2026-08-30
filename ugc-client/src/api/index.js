@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:80/api/v1';
+const API_BASE = '/api/v1';
 
 const ACCESS_TOKEN_KEY = 'ugc_access_token';
 const REFRESH_TOKEN_KEY = 'ugc_refresh_token';
@@ -6,6 +6,7 @@ const REFRESH_TOKEN_KEY = 'ugc_refresh_token';
 export const authStorage = {
     getAccessToken: () => localStorage.getItem(ACCESS_TOKEN_KEY),
     getRefreshToken: () => localStorage.getItem(REFRESH_TOKEN_KEY),
+    getMe: () => request('/users/me'),
     setTokens: (accessToken, refreshToken) => {
         localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
         if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
@@ -32,7 +33,23 @@ export function decodeAccessTokenRoles() {
         return [];
     }
 }
-
+export function decodeAccessTokenUser() {
+    const token = authStorage.getAccessToken();
+    if (!token) return null;
+    try {
+        const payload = token.split('.')[1];
+        const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+        const claims = JSON.parse(json);
+        // Spring Security в sub обычно кладет username или email
+        return {
+            username: claims.sub,
+            userId: claims.userId || claims.id,
+            roles: Array.isArray(claims.roles) ? claims.roles : []
+        };
+    } catch {
+        return null;
+    }
+}
 function authHeaders() {
     const token = authStorage.getAccessToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -110,6 +127,22 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ refreshToken }),
     }),
+    // Public self-registration (Advertiser/Partner only) + password recovery.
+    register: (payload) => request('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    }),
+    forgotPassword: (email) => request('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+    }),
+    resetPassword: (token, newPassword) => request('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token, newPassword }),
+    }),
+    // Telegram account-binding banner (Advertiser/Partner) — issues a one-time bind token +
+    // ready-made t.me deep link; sending /start bind_TOKEN to the bot completes the binding.
+    getTgBindToken: (userId) => request(`/users/${userId}/tg-bind-token`, { method: 'POST' }),
 
     // --- Media (Module 4) ---
     uploadMedia: (file, onProgress) => uploadMediaWithProgress(file, onProgress),
@@ -120,12 +153,18 @@ export const api = {
 
     // Called with no args by everyone except the Worker Workbench (App.jsx's own bootstrap
     // isn't offer-aware, AdvertiserCabinet/ModeratorCabinet don't touch this at all) — those
-    // keep hitting the original /offers/active. Passing a workerId (WorkerOffersPage's "Каталог"
-    // tab) switches to the new /offers/catalog endpoint, which annotates each offer with
-    // isTaken for that worker. See INTEGRATION_GUIDE.md for why this is a separate path rather
-    // than /offers/active?workerId=.
-    getActiveOffers: (workerId) => request(workerId ? `/offers/catalog?workerId=${workerId}` : '/offers/active'),
-    getAdvertiserOffers: (advId) => request(`/offers/advertiser/${advId}`),
+    // keep hitting the original /offers/active (unpaginated — OfferController's own endpoint).
+    // Passing a workerId (WorkerOffersPage's "Каталог" tab) switches to the new paginated
+    // /offers/catalog endpoint (WorkerOfferController), which also annotates each offer with
+    // isTaken for that worker and supports server-side search/platform filtering.
+    getActiveOffers: (workerId, search = '', platform = '', page = 0, size = 10) => request(
+        workerId
+            ? `/offers/catalog?workerId=${workerId}&page=${page}&size=${size}`
+                + (search ? `&search=${encodeURIComponent(search)}` : '')
+                + (platform && platform !== 'ALL' ? `&platform=${platform}` : '')
+            : '/offers/active'
+    ),
+    getAdvertiserOffers: (advId, page = 0, size = 10) => request(`/offers/advertiser/${advId}?page=${page}&size=${size}`),
     createOffer: (advId, payload) => request(`/offers?advertiserId=${advId}`, {
         method: 'POST',
         body: JSON.stringify(payload)
@@ -136,7 +175,7 @@ export const api = {
     // --- Worker Workbench ("Взять оффер в работу") ---
     takeOffer: (offerId, workerId) => request(`/offers/${offerId}/take?workerId=${workerId}`, { method: 'POST' }),
     leaveOffer: (offerId, workerId) => request(`/offers/${offerId}/leave?workerId=${workerId}`, { method: 'POST' }),
-    getMyOffers: (workerId) => request(`/offers/my?workerId=${workerId}`),
+    getMyOffers: (workerId, page = 0, size = 10) => request(`/offers/my?workerId=${workerId}&page=${page}&size=${size}`),
     // Offer Details Hub — full campaign info + this worker's own progress/submission history for it.
     getOfferDetails: (offerId, workerId) => request(`/offers/${offerId}/details?workerId=${workerId}`),
 
@@ -144,10 +183,18 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload)
     }),
-    getWorkerSubmissions: (workerId) => request(`/submissions/worker/${workerId}`),
+    // Pagination initiative — status/campaignId are optional narrowing filters; campaignId lets
+    // WorkerSubmissionsPage's campaign dropdown filter the paginated list server-side.
+    getWorkerSubmissions: (workerId, status, campaignId, page = 0, size = 20) => request(
+        `/submissions/worker/${workerId}?page=${page}&size=${size}`
+        + (status ? `&status=${status}` : '')
+        + (campaignId ? `&campaignId=${campaignId}` : '')
+    ),
     getOfferSubmissions: (offerId, advId) => request(`/submissions/offer/${offerId}?advertiserId=${advId}`),
 
-    getModerationQueue: () => request('/moderation/queue'),
+    getModerationQueue: (status, page = 0, size = 15) => request(
+        `/moderation/queue?page=${page}&size=${size}${status && status !== 'ALL' ? `&status=${status}` : ''}`
+    ),
     approveSubmission: (id, comment = 'Одобрено модератором') => request(`/moderation/${id}/approve`, {
         method: 'POST',
         body: JSON.stringify({ comment })
@@ -158,17 +205,16 @@ export const api = {
     }),
 
     // --- Wallet & Payouts (Module 5 — Payout Engine) ---
-    // NOTE: these three assume the ТЗ's Module 5 PayoutController (/api/v1/payouts) and a
-    // financial_ledger read endpoint, neither of which exist on the backend yet (that's Этап 3).
-    // Until then WorkerWalletPage will show a friendly "недоступно" empty state instead of crashing —
-    // wire these up for real once PayoutController lands, the paths below are the ТЗ's own naming.
+    // Backed by PayoutController (/api/v1/payouts) since the Admin Back-Office round — Worker and
+    // Partner Wallet pages already called these paths before that controller existed, so nothing
+    // here changed, it just stopped 404ing.
     updateTrc20Wallet: (userId, trc20Wallet) => api.updateWallet(userId, trc20Wallet),
     requestPayout: (userId, amount, trc20Wallet) => request('/payouts', {
         method: 'POST',
         body: JSON.stringify({ userId, amount, trc20Wallet })
     }),
-    getPayoutHistory: (userId) => request(`/payouts/user/${userId}`),
-    getFinancialLedger: (userId) => request(`/users/${userId}/ledger`),
+    getPayoutHistory: (userId, page = 0, size = 10) => request(`/payouts/user/${userId}?page=${page}&size=${size}`),
+    getFinancialLedger: (userId, page = 0, size = 20) => request(`/users/${userId}/ledger?page=${page}&size=${size}`),
 
     // --- Referrals (Module 7 — B2C referral hub) ---
     // Same caveat: no backend controller for this yet. Expected shape:
@@ -181,8 +227,8 @@ export const api = {
     stopOffer: (advertiserId, offerId) => request(`/advertiser/${advertiserId}/offers/${offerId}/stop`, { method: 'POST' }),
     // Traffic Inspector registry — every submission across the advertiser's campaigns, optionally
     // narrowed to one status (PENDING_REVIEW / APPROVED / DISPUTED / REJECTED / ...).
-    getAdvertiserTraffic: (advertiserId, status) => request(
-        `/advertiser/${advertiserId}/traffic${status ? `?status=${status}` : ''}`
+    getAdvertiserTraffic: (advertiserId, status, page = 0, size = 20) => request(
+        `/advertiser/${advertiserId}/traffic?page=${page}&size=${size}${status ? `&status=${status}` : ''}`
     ),
     // Dispute Flow — flags a submission from the Traffic Inspector instead of waiting on
     // the normal moderation queue.
@@ -196,9 +242,73 @@ export const api = {
         body: JSON.stringify({ amount }),
     }),
 
-    // --- Reference data (Offer Wizard's platform/GEO pickers) ---
+    // --- B2B Partner Cabinet ---
+    getPartnerDashboard: (partnerId) => request('/partner/' + partnerId + '/dashboard'),
+    getPartnerAdvertisers: (partnerId, search = '', page = 0, size = 10) => request(
+        `/partner/${partnerId}/advertisers?page=${page}&size=${size}${search ? `&search=${encodeURIComponent(search)}` : ''}`
+    ),
+    getPartnerTerms: (partnerId) => request('/partner/' + partnerId + '/terms'),
+
+    // --- Reference data (Offer Wizard's platform/GEO pickers, platform margin) ---
     getPlatforms: () => request('/reference/platforms'),
     getGeos: () => request('/reference/geos'),
+    getPlatformSettings: () => request('/reference/settings'),
+
+    // --- Advertiser Analytics Hub ---
+    // from/to are ISO-8601 dates (yyyy-MM-dd); omit both to get the backend's default 30-day window.
+    getAdvertiserDeepAnalytics: (advertiserId, from, to) => request(
+        `/advertiser/${advertiserId}/analytics${from && to ? `?from=${from}&to=${to}` : ''}`
+    ),
+    // Campaign-comparison table — split out of the main analytics payload into its own paginated
+    // endpoint (pagination initiative).
+    getAdvertiserCampaignComparison: (advertiserId, from, to, page = 0, size = 10) => request(
+        `/advertiser/${advertiserId}/analytics/campaigns?page=${page}&size=${size}${from && to ? `&from=${from}&to=${to}` : ''}`
+    ),
+
+    // --- Admin Back-Office ---
+    getAdminDashboard: () => request('/admin/dashboard'),
+    getAdminLedger: (type, page = 0, size = 25) => request(
+        `/admin/ledger?page=${page}&size=${size}${type ? `&type=${type}` : ''}`
+    ),
+    getAdminUsers: (role, search, page = 0, size = 20) => request(
+        `/admin/users?page=${page}&size=${size}${role ? `&role=${role}` : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}`
+    ),
+    toggleUserBan: (userId, isBanned) => request(`/admin/users/${userId}/status?isBanned=${isBanned}`, { method: 'PUT' }),
+    adjustUserBalance: (userId, amount, comment) => request(`/admin/users/${userId}/balance-adjust`, {
+        method: 'POST',
+        body: JSON.stringify({ amount, comment }),
+    }),
+    updatePartnerTerms: (userId, terms) => request(`/admin/users/${userId}/b2b-terms`, {
+        method: 'PUT',
+        body: JSON.stringify(terms),
+    }),
+    getAdminPayouts: (status, page = 0, size = 20) => request(
+        `/admin/payouts?page=${page}&size=${size}${status ? `&status=${status}` : ''}`
+    ),
+    processPayout: (payoutId) => request(`/admin/payouts/${payoutId}/process`, { method: 'POST' }),
+    completePayout: (payoutId, txHash) => request(`/admin/payouts/${payoutId}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ txHash }),
+    }),
+    rejectPayout: (payoutId, comment) => request(`/admin/payouts/${payoutId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ comment }),
+    }),
+    getAdminOffers: (page = 0, size = 20) => request(`/admin/offers?page=${page}&size=${size}`),
+    adminSetOfferStatus: (offerId, isActive) => request(`/admin/offers/${offerId}/status?isActive=${isActive}`, { method: 'PUT' }),
+    getAdminPlatforms: () => request('/admin/reference/platforms'),
+    savePlatform: (platform) => request('/admin/reference/platforms', {
+        method: 'POST',
+        body: JSON.stringify(platform),
+    }),
+    togglePlatform: (id) => request(`/admin/reference/platforms/${id}/toggle`, { method: 'PUT' }),
+    getAdminGeos: () => request('/admin/reference/geos'),
+    saveGeo: (geo) => request('/admin/reference/geos', {
+        method: 'POST',
+        body: JSON.stringify(geo),
+    }),
+    toggleGeo: (id) => request(`/admin/reference/geos/${id}/toggle`, { method: 'PUT' }),
+    updatePlatformMargin: (margin) => request(`/admin/settings/margin?margin=${margin}`, { method: 'PUT' }),
 };
 
 // Uses XHR instead of fetch so we can report real upload progress to the FileUploader component.

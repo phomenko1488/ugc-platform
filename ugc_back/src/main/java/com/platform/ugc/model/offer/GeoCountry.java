@@ -36,6 +36,13 @@ public class GeoCountry {
     @Builder.Default
     private Integer tier = 3;
 
+    // Admin Back-Office reference-data management (Справочники платформ и ГЕО) — mirrors
+    // PlatformEntity.isEnabled. Existing rows get true via Hibernate's ddl-auto=update default
+    // fill, so pre-existing seeded countries stay available after this column is added.
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isEnabled = true;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

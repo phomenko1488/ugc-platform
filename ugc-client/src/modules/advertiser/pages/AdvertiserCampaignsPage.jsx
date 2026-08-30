@@ -1,32 +1,53 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Loader2, PlayCircle, PauseCircle, PlusCircle, DollarSign, ChevronRight } from 'lucide-react';
 import { api } from '../../../api';
 import TopUpModal from '../components/TopUpModal';
+import Pagination from '../../../components/Pagination';
+
+const DEFAULT_PAGE_SIZE = 10;
 
 /**
  * Campaigns table — every offer the advertiser has launched, with quick pause/resume, a top-up
  * shortcut, and a "Подробнее" drill-down into AdvertiserCampaignDetailPage (via onOpenOffer).
+ * Pagination initiative: server-paginated via api.getAdvertiserOffers(advertiserId, page, size).
  */
 export default function AdvertiserCampaignsPage({ advertiser, refreshKey, onOpenOffer, onOpenWizard, onBalanceChanged }) {
     const [offers, setOffers] = useState(null); // null = loading
+    const [page, setPage] = useState({ pageNumber: 0, pageSize: DEFAULT_PAGE_SIZE, totalElements: 0, totalPages: 0 });
     const [error, setError] = useState(null);
     const [togglingId, setTogglingId] = useState(null);
     const [topUpOffer, setTopUpOffer] = useState(null);
 
-    const load = () => {
+    // No default params referencing `page` here: load is memoized via useCallback with a fixed
+    // dependency list, so a closure-captured default would go stale after setPage — every call
+    // site below passes pageNumber/pageSize explicitly instead, read live from state.
+    const load = useCallback((pageNumber, pageSize) => {
         if (!advertiser?.id) return;
-        api.getAdvertiserOffers(advertiser.id)
-            .then((data) => { setOffers(data || []); setError(null); })
+        api.getAdvertiserOffers(advertiser.id, pageNumber, pageSize)
+            .then((result) => {
+                setOffers(result?.content || []);
+                setPage({
+                    pageNumber: result?.pageNumber ?? 0,
+                    pageSize: result?.pageSize ?? pageSize,
+                    totalElements: result?.totalElements ?? 0,
+                    totalPages: result?.totalPages ?? 0,
+                });
+                setError(null);
+            })
             .catch((err) => setError(err.message || 'Не удалось загрузить кампании'));
-    };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [advertiser?.id]);
 
-    useEffect(load, [advertiser?.id, refreshKey]);
+    useEffect(() => { load(0, page.pageSize); }, [advertiser?.id, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handlePageChange = (nextPage) => load(nextPage, page.pageSize);
+    const handlePageSizeChange = (nextSize) => load(0, nextSize);
 
     const handleToggle = async (offer) => {
         setTogglingId(offer.id);
         try {
             await api.setOfferStatus(offer.id, advertiser.id, !offer.isActive);
-            load();
+            load(page.pageNumber, page.pageSize);
         } catch (err) {
             setError(err.message || 'Не удалось изменить статус кампании');
         } finally {
@@ -67,6 +88,7 @@ export default function AdvertiserCampaignsPage({ advertiser, refreshKey, onOpen
                     У вас пока нет запущенных кампаний.
                 </div>
             ) : (
+                <>
                 <div className="grid gap-3">
                     {offers?.map((offer) => (
                         <div key={offer.id} className="bg-brand-card border border-brand-border p-5 rounded-2xl space-y-3">
@@ -124,6 +146,15 @@ export default function AdvertiserCampaignsPage({ advertiser, refreshKey, onOpen
                         </div>
                     ))}
                 </div>
+                <Pagination
+                    currentPage={page.pageNumber}
+                    totalPages={page.totalPages}
+                    totalElements={page.totalElements}
+                    pageSize={page.pageSize}
+                    onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
+                />
+                </>
             )}
 
             {topUpOffer && (
@@ -133,7 +164,7 @@ export default function AdvertiserCampaignsPage({ advertiser, refreshKey, onOpen
                     onClose={() => setTopUpOffer(null)}
                     onToppedUp={() => {
                         setTopUpOffer(null);
-                        load();
+                        load(page.pageNumber, page.pageSize);
                         onBalanceChanged?.();
                     }}
                 />

@@ -3,10 +3,12 @@ import AdvertiserSidebar from './components/AdvertiserSidebar';
 import AdvertiserHeader from './components/AdvertiserHeader';
 import OfferWizardModal from './components/OfferWizardModal';
 import AdvertiserDashboardPage from './pages/AdvertiserDashboardPage';
+import AdvertiserAnalyticsPage from './pages/AdvertiserAnalyticsPage';
 import AdvertiserCampaignsPage from './pages/AdvertiserCampaignsPage';
 import AdvertiserCampaignDetailPage from './pages/AdvertiserCampaignDetailPage';
 import AdvertiserTrafficPage from './pages/AdvertiserTrafficPage';
 import AdvertiserBillingPage from './pages/AdvertiserBillingPage';
+import TelegramLinkBanner from '../../components/TelegramLinkBanner';
 import { api } from '../../api';
 
 /**
@@ -82,6 +84,8 @@ export default function AdvertiserLayout({ advertiser, onRefresh, onLogout }) {
                     onCreateCampaign={() => setWizardOpen(true)}
                 />
 
+                <TelegramLinkBanner user={advertiser} />
+
                 <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
                     {selectedOfferId ? (
                         <AdvertiserCampaignDetailPage
@@ -107,6 +111,9 @@ export default function AdvertiserLayout({ advertiser, onRefresh, onLogout }) {
                                     onOpenWizard={() => setWizardOpen(true)}
                                     onBalanceChanged={handleDataChanged}
                                 />
+                            )}
+                            {activePage === 'analytics' && (
+                                <AdvertiserAnalyticsPage advertiser={advertiser} />
                             )}
                             {activePage === 'traffic' && (
                                 <AdvertiserTrafficPage

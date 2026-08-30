@@ -19,7 +19,7 @@ import WorkerReferralsPage from './pages/WorkerReferralsPage';
  * the id to fall back to whichever tab was active underneath (always 'offers', since that's the
  * only page that can open one).
  */
-export default function WorkerLayout({ worker, offers, submissions, onRefresh, onLogout }) {
+export default function WorkerLayout({ worker, offers, onRefresh, onLogout }) {
     const [activePage, setActivePage] = useState('offers');
     const [selectedOfferId, setSelectedOfferId] = useState(null);
 
@@ -68,7 +68,7 @@ export default function WorkerLayout({ worker, offers, submissions, onRefresh, o
                             <WorkerOffersPage worker={worker} offers={offers} onRefresh={onRefresh} onOpenOffer={setSelectedOfferId} />
                         )}
                         {activePage === 'submissions' && (
-                            <WorkerSubmissionsPage submissions={submissions} onRefresh={onRefresh} />
+                            <WorkerSubmissionsPage worker={worker} />
                         )}
                         {activePage === 'wallet' && (
                             <WorkerWalletPage worker={worker} onRefresh={onRefresh} />

@@ -1,5 +1,6 @@
 package com.platform.ugc.service.offer;
 
+import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.offer.OfferCreateRequestDTO;
 import com.platform.ugc.dto.offer.OfferResponseDTO;
 import com.platform.ugc.model.offer.Offer;
@@ -12,7 +13,7 @@ public interface OfferService {
     Offer getById(Long id);
     OfferResponseDTO getOfferDetails(Long id);
     List<OfferResponseDTO> getActiveOffersForWorkers();
-    List<OfferResponseDTO> getOffersByAdvertiser(Long advertiserId);
+    PageResponseDTO<OfferResponseDTO> getOffersByAdvertiser(Long advertiserId, int page, int size);
     void setOfferActiveStatus(Long offerId, Long advertiserId, boolean isActive);
     void topUpOfferBudget(Long offerId, Long advertiserId, BigDecimal additionalBudget);
     void deductBudget(Long offerId, BigDecimal amount);

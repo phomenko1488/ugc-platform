@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Search, Flame, Inbox, Loader2 } from 'lucide-react';
 import { api } from '../../../api';
 import OfferCard from '../components/OfferCard';
 import SubmissionModal from '../components/SubmissionModal';
+import Pagination from '../../../components/Pagination';
 
 const PLATFORM_FILTERS = [
     { key: 'ALL', label: 'Все' },
@@ -16,16 +17,31 @@ const SUB_TABS = [
     { key: 'ALL_OFFERS', label: 'Каталог' },
 ];
 
+const DEFAULT_PAGE_SIZE = 10;
+
+// Debounces the catalog's search box the same way AdminUsersPage does — waits for the user to
+// stop typing before hitting the server, instead of re-fetching on every keystroke.
+const SEARCH_DEBOUNCE_MS = 300;
+
 /**
  * Worker's offer Workbench — "Взять оффер в работу". Self-fetches both lists (rather than relying
  * on App.jsx's shared `offers` state, which has no per-worker isTaken/stats annotation and is
  * also used by Advertiser/Moderator cabinets) so taking/leaving an offer can refresh just this
  * page instantly instead of round-tripping through the whole app's loadData().
+ * <p>
+ * Pagination initiative: both sub-tabs are now server-paginated with their own independent
+ * {page, pageSize} state, and the catalog's search/platform filters are resolved server-side
+ * (WorkerOfferController's /catalog) rather than client-side over a fully-fetched array.
  */
 export default function WorkerOffersPage({ worker, onRefresh, onOpenOffer }) {
     const [subTab, setSubTab] = useState('MY_OFFERS');
+
     const [myOffers, setMyOffers] = useState([]);
+    const [myPage, setMyPage] = useState({ pageNumber: 0, pageSize: DEFAULT_PAGE_SIZE, totalElements: 0, totalPages: 0 });
+
     const [catalogOffers, setCatalogOffers] = useState([]);
+    const [catalogPage, setCatalogPage] = useState({ pageNumber: 0, pageSize: DEFAULT_PAGE_SIZE, totalElements: 0, totalPages: 0 });
+
     const [loading, setLoading] = useState(true);
     const [actionError, setActionError] = useState(null);
     const [pendingOfferId, setPendingOfferId] = useState(null);
@@ -33,35 +49,83 @@ export default function WorkerOffersPage({ worker, onRefresh, onOpenOffer }) {
     const [platformFilter, setPlatformFilter] = useState('ALL');
     const [submittingOffer, setSubmittingOffer] = useState(null);
 
-    const loadWorkbench = useCallback(async () => {
+    const loadMyOffers = useCallback(async (page = myPage.pageNumber, size = myPage.pageSize) => {
+        if (!worker?.id) return;
+        const result = await api.getMyOffers(worker.id, page, size);
+        setMyOffers(result?.content || []);
+        setMyPage({
+            pageNumber: result?.pageNumber ?? 0,
+            pageSize: result?.pageSize ?? size,
+            totalElements: result?.totalElements ?? 0,
+            totalPages: result?.totalPages ?? 0,
+        });
+    }, [worker?.id, myPage.pageNumber, myPage.pageSize]);
+
+    const loadCatalog = useCallback(async (page = catalogPage.pageNumber, size = catalogPage.pageSize) => {
+        if (!worker?.id) return;
+        const result = await api.getActiveOffers(worker.id, search, platformFilter, page, size);
+        setCatalogOffers(result?.content || []);
+        setCatalogPage({
+            pageNumber: result?.pageNumber ?? 0,
+            pageSize: result?.pageSize ?? size,
+            totalElements: result?.totalElements ?? 0,
+            totalPages: result?.totalPages ?? 0,
+        });
+    }, [worker?.id, catalogPage.pageNumber, catalogPage.pageSize, search, platformFilter]);
+
+    const loadBoth = useCallback(async () => {
         if (!worker?.id) return;
         try {
             setActionError(null);
-            const [mine, catalog] = await Promise.all([
-                api.getMyOffers(worker.id),
-                api.getActiveOffers(worker.id),
-            ]);
-            setMyOffers(mine || []);
-            setCatalogOffers(catalog || []);
+            await Promise.all([loadMyOffers(0, myPage.pageSize), loadCatalog(0, catalogPage.pageSize)]);
         } catch (err) {
             console.error('Не удалось загрузить офферы воркера:', err);
             setActionError(err.message || 'Не удалось загрузить офферы');
         } finally {
             setLoading(false);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [worker?.id]);
 
+    // Initial load — both tabs, page 0.
     useEffect(() => {
         setLoading(true);
-        loadWorkbench();
-    }, [loadWorkbench]);
+        loadBoth();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [worker?.id]);
+
+    // Re-fetch the catalog (reset to page 0) whenever search/platform filters change, debounced.
+    useEffect(() => {
+        if (!worker?.id) return;
+        const timeout = setTimeout(() => {
+            loadCatalog(0, catalogPage.pageSize).catch((err) => {
+                console.error('Не удалось загрузить каталог офферов:', err);
+                setActionError(err.message || 'Не удалось загрузить каталог');
+            });
+        }, search ? SEARCH_DEBOUNCE_MS : 0);
+        return () => clearTimeout(timeout);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, platformFilter]);
+
+    const handleMyPageChange = (nextPage) => {
+        loadMyOffers(nextPage, myPage.pageSize).catch((err) => setActionError(err.message));
+    };
+    const handleMyPageSizeChange = (nextSize) => {
+        loadMyOffers(0, nextSize).catch((err) => setActionError(err.message));
+    };
+    const handleCatalogPageChange = (nextPage) => {
+        loadCatalog(nextPage, catalogPage.pageSize).catch((err) => setActionError(err.message));
+    };
+    const handleCatalogPageSizeChange = (nextSize) => {
+        loadCatalog(0, nextSize).catch((err) => setActionError(err.message));
+    };
 
     const handleTake = async (offer) => {
         setPendingOfferId(offer.id);
         setActionError(null);
         try {
             await api.takeOffer(offer.id, worker.id);
-            await loadWorkbench();
+            await Promise.all([loadMyOffers(0, myPage.pageSize), loadCatalog(catalogPage.pageNumber, catalogPage.pageSize)]);
             setSubTab('MY_OFFERS');
         } catch (err) {
             console.error('Не удалось взять оффер в работу:', err);
@@ -76,7 +140,7 @@ export default function WorkerOffersPage({ worker, onRefresh, onOpenOffer }) {
         setActionError(null);
         try {
             await api.leaveOffer(offer.id, worker.id);
-            await loadWorkbench();
+            await Promise.all([loadMyOffers(myPage.pageNumber, myPage.pageSize), loadCatalog(catalogPage.pageNumber, catalogPage.pageSize)]);
         } catch (err) {
             console.error('Не удалось отказаться от оффера:', err);
             setActionError(err.message || 'Не удалось отказаться от оффера');
@@ -85,19 +149,10 @@ export default function WorkerOffersPage({ worker, onRefresh, onOpenOffer }) {
         }
     };
 
-    const filteredCatalog = useMemo(() => {
-        return (catalogOffers || []).filter((offer) => {
-            const matchesSearch = search.trim() === ''
-                || offer.title?.toLowerCase().includes(search.trim().toLowerCase());
-
-            const matchesPlatform = platformFilter === 'ALL'
-                || offer.allowedPlatforms?.some((p) => p.code === platformFilter);
-
-            return matchesSearch && matchesPlatform;
-        });
-    }, [catalogOffers, search, platformFilter]);
-
-    const activeList = subTab === 'MY_OFFERS' ? myOffers : filteredCatalog;
+    const activeList = subTab === 'MY_OFFERS' ? myOffers : catalogOffers;
+    const activePage = subTab === 'MY_OFFERS' ? myPage : catalogPage;
+    const handleActivePageChange = subTab === 'MY_OFFERS' ? handleMyPageChange : handleCatalogPageChange;
+    const handleActivePageSizeChange = subTab === 'MY_OFFERS' ? handleMyPageSizeChange : handleCatalogPageSizeChange;
 
     return (
         <div className="space-y-5">
@@ -118,11 +173,11 @@ export default function WorkerOffersPage({ worker, onRefresh, onOpenOffer }) {
                         }`}
                     >
                         {label}
-                        {key === 'MY_OFFERS' && myOffers.length > 0 && (
+                        {key === 'MY_OFFERS' && myPage.totalElements > 0 && (
                             <span className={`text-[10px] font-mono min-w-[18px] px-1 rounded-full ${
                                 subTab === key ? 'bg-brand-bg/25 text-brand-bg' : 'bg-brand-border text-slate-300'
                             }`}>
-                                {myOffers.length}
+                                {myPage.totalElements}
                             </span>
                         )}
                     </button>
@@ -192,20 +247,30 @@ export default function WorkerOffersPage({ worker, onRefresh, onOpenOffer }) {
                     </div>
                 )
             ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                    {activeList.map((offer) => (
-                        <OfferCard
-                            key={offer.id}
-                            offer={offer}
-                            showStats={subTab === 'MY_OFFERS'}
-                            isPending={pendingOfferId === offer.id}
-                            onTake={handleTake}
-                            onLeave={handleLeave}
-                            onSubmit={setSubmittingOffer}
-                            onOpenDetails={(o) => onOpenOffer?.(o.id)}
-                        />
-                    ))}
-                </div>
+                <>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {activeList.map((offer) => (
+                            <OfferCard
+                                key={offer.id}
+                                offer={offer}
+                                showStats={subTab === 'MY_OFFERS'}
+                                isPending={pendingOfferId === offer.id}
+                                onTake={handleTake}
+                                onLeave={handleLeave}
+                                onSubmit={setSubmittingOffer}
+                                onOpenDetails={(o) => onOpenOffer?.(o.id)}
+                            />
+                        ))}
+                    </div>
+                    <Pagination
+                        currentPage={activePage.pageNumber}
+                        totalPages={activePage.totalPages}
+                        totalElements={activePage.totalElements}
+                        pageSize={activePage.pageSize}
+                        onPageChange={handleActivePageChange}
+                        onPageSizeChange={handleActivePageSizeChange}
+                    />
+                </>
             )}
 
             {submittingOffer && (
@@ -215,7 +280,7 @@ export default function WorkerOffersPage({ worker, onRefresh, onOpenOffer }) {
                     onClose={() => setSubmittingOffer(null)}
                     onSubmitted={() => {
                         setSubmittingOffer(null);
-                        loadWorkbench();
+                        loadBoth();
                         onRefresh?.();
                     }}
                 />

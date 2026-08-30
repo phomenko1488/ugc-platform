@@ -17,12 +17,18 @@ const FALLBACK_GEOS = [
     { id: 3, isoCode: 'BLR', name: 'Беларусь' },
 ];
 
+// Matches PlatformSettings' seeded default (25.00%) so the commission preview is sane even
+// before /api/v1/reference/settings responds.
+const FALLBACK_MARGIN_PERCENTAGE = 25;
+
 const DEFAULT_FORM = {
     title: '',
     requirementsDescription: '',
+    mediaKitUrl: '',
+    brandAssetUrls: '',
     advertiserCpmRate: 250,
-    workerCpmRate: 170,
     minViewsThreshold: 50000,
+    maxViewsCapPerVideo: '',
     minEngagementRate: 2.5,
     totalBudget: 1000,
     holdPeriodDays: 7,
@@ -31,15 +37,20 @@ const DEFAULT_FORM = {
 };
 
 /**
- * 4-step campaign creation wizard: basic info -> rates/budget -> platforms/geos (fetched from
- * the reference-data endpoints, falling back to the DataInitializer seed order if that call
- * fails) -> review & confirm. Submits via api.createOffer on the final step.
+ * 4-step campaign creation wizard: basic info & media kit -> CPM/budget (worker payout is
+ * computed, not entered — see marginPercentage below) -> platforms/geos (fetched from the
+ * reference-data endpoints, falling back to the DataInitializer seed order if that call fails)
+ * -> review & confirm. Submits via api.createOffer on the final step.
  */
 export default function OfferWizardModal({ advertiser, onClose, onCreated }) {
     const [step, setStep] = useState(0);
     const [form, setForm] = useState(DEFAULT_FORM);
     const [platforms, setPlatforms] = useState(FALLBACK_PLATFORMS);
     const [geos, setGeos] = useState(FALLBACK_GEOS);
+    // Platform's cut of the advertiser's CPM, e.g. 25 = platform keeps 25%, worker gets the
+    // remaining 75% — mirrors OfferServiceImpl.createOffer's server-side computation exactly,
+    // so what the advertiser sees here matches what actually gets persisted on submit.
+    const [marginPercentage, setMarginPercentage] = useState(FALLBACK_MARGIN_PERCENTAGE);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
 
@@ -49,6 +60,11 @@ export default function OfferWizardModal({ advertiser, onClose, onCreated }) {
         }).catch(() => {});
         api.getGeos().then((data) => {
             if (Array.isArray(data) && data.length) setGeos(data);
+        }).catch(() => {});
+        api.getPlatformSettings().then((data) => {
+            if (data && data.defaultMarginPercentage != null) {
+                setMarginPercentage(Number(data.defaultMarginPercentage));
+            }
         }).catch(() => {});
     }, []);
 
@@ -62,10 +78,16 @@ export default function OfferWizardModal({ advertiser, onClose, onCreated }) {
         });
     };
 
+    // Live commission preview for Step 2 — recomputed on every keystroke, same formula as
+    // OfferServiceImpl.createOffer: workerCpmRate = advertiserCpmRate * (1 - margin/100).
+    const advertiserCpmRateNum = Number(form.advertiserCpmRate) || 0;
+    const computedWorkerCpmRate = advertiserCpmRateNum * (1 - marginPercentage / 100);
+    const computedPlatformMargin = advertiserCpmRateNum - computedWorkerCpmRate;
+
     const stepIsValid = () => {
         if (step === 0) return form.title.trim().length > 0;
         if (step === 1) {
-            return Number(form.advertiserCpmRate) > Number(form.workerCpmRate)
+            return advertiserCpmRateNum > 0
                 && Number(form.totalBudget) > 0
                 && Number(form.minViewsThreshold) > 0;
         }
@@ -76,7 +98,7 @@ export default function OfferWizardModal({ advertiser, onClose, onCreated }) {
     const handleNext = () => {
         setError(null);
         if (!stepIsValid()) {
-            if (step === 1) setError('Ставка рекламодателя должна быть строго выше выплаты воркеру, бюджет и порог просмотров — больше 0.');
+            if (step === 1) setError('Ставка списания, бюджет и порог просмотров должны быть больше 0.');
             else if (step === 2) setError('Выберите хотя бы одну платформу и одну ГЕО-локацию.');
             return;
         }
@@ -89,12 +111,19 @@ export default function OfferWizardModal({ advertiser, onClose, onCreated }) {
         setError(null);
         setSubmitting(true);
         try {
+            const brandAssetUrls = form.brandAssetUrls
+                .split('\n')
+                .map((url) => url.trim())
+                .filter(Boolean);
+
             await api.createOffer(advertiser.id, {
                 title: form.title.trim(),
                 requirementsDescription: form.requirementsDescription.trim() || null,
-                advertiserCpmRate: Number(form.advertiserCpmRate),
-                workerCpmRate: Number(form.workerCpmRate),
+                mediaKitUrl: form.mediaKitUrl.trim() || null,
+                brandAssetUrls,
+                advertiserCpmRate: advertiserCpmRateNum,
                 minViewsThreshold: Number(form.minViewsThreshold),
+                maxViewsCapPerVideo: form.maxViewsCapPerVideo ? Number(form.maxViewsCapPerVideo) : null,
                 minEngagementRate: Number(form.minEngagementRate),
                 totalBudget: Number(form.totalBudget),
                 holdPeriodDays: Number(form.holdPeriodDays),
@@ -108,8 +137,6 @@ export default function OfferWizardModal({ advertiser, onClose, onCreated }) {
             setSubmitting(false);
         }
     };
-
-    const spread = (Number(form.advertiserCpmRate) - Number(form.workerCpmRate)) || 0;
 
     return (
         <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center">
@@ -158,33 +185,54 @@ export default function OfferWizardModal({ advertiser, onClose, onCreated }) {
                                     className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent resize-none"
                                 />
                             </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Ссылка на облачный архив с исходниками</label>
+                                <input
+                                    type="text"
+                                    placeholder="https://drive.google.com/... или другое облако"
+                                    value={form.mediaKitUrl}
+                                    onChange={(e) => update({ mediaKitUrl: e.target.value })}
+                                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent"
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1">Пак исходников, звуков и брифа — воркер увидит кнопку скачивания на странице оффера.</p>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Ссылки на брендовые ассеты (по одной на строку)</label>
+                                <textarea
+                                    rows={2}
+                                    placeholder={'https://.../logo.png\nhttps://.../banner.png'}
+                                    value={form.brandAssetUrls}
+                                    onChange={(e) => update({ brandAssetUrls: e.target.value })}
+                                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent resize-none"
+                                />
+                            </div>
                         </>
                     )}
 
                     {step === 1 && (
                         <>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">Списание ($/1M)</label>
-                                    <input
-                                        type="number" step="0.01"
-                                        value={form.advertiserCpmRate}
-                                        onChange={(e) => update({ advertiserCpmRate: e.target.value })}
-                                        className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-brand-accent"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">Воркеру ($/1M)</label>
-                                    <input
-                                        type="number" step="0.01"
-                                        value={form.workerCpmRate}
-                                        onChange={(e) => update({ workerCpmRate: e.target.value })}
-                                        className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-brand-accent"
-                                    />
-                                </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Ваша ставка списания ($/1M просмотров)</label>
+                                <input
+                                    type="number" step="0.01"
+                                    value={form.advertiserCpmRate}
+                                    onChange={(e) => update({ advertiserCpmRate: e.target.value })}
+                                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-brand-accent"
+                                />
                             </div>
-                            <div className="bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2 text-[11px] font-mono text-slate-400">
-                                Спред платформы: <span className={spread > 0 ? 'text-brand-accent font-bold' : 'text-brand-danger font-bold'}>${spread.toFixed(2)}</span>
+                            <div className="bg-brand-bg border border-brand-border rounded-xl px-3.5 py-3 space-y-1.5 text-[11px] font-mono">
+                                <div className="flex items-center justify-between text-slate-400">
+                                    <span>Комиссия платформы</span>
+                                    <span className="text-white font-bold">{marginPercentage}%</span>
+                                </div>
+                                <div className="flex items-center justify-between text-slate-400">
+                                    <span>Ставка воркера (рассчитано)</span>
+                                    <span className="text-brand-accent font-bold">${computedWorkerCpmRate.toFixed(2)}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-slate-400">
+                                    <span>Маржа платформы / 1M</span>
+                                    <span className="text-brand-success font-bold">${computedPlatformMargin.toFixed(2)}</span>
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
@@ -225,6 +273,21 @@ export default function OfferWizardModal({ advertiser, onClose, onCreated }) {
                                         className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-brand-accent"
                                     />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                                    Лимит просмотров на 1 видео <span className="text-slate-500 font-normal">(опционально)</span>
+                                </label>
+                                <input
+                                    type="number" step="1000" min="1"
+                                    placeholder="Без ограничения"
+                                    value={form.maxViewsCapPerVideo}
+                                    onChange={(e) => update({ maxViewsCapPerVideo: e.target.value })}
+                                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-brand-accent placeholder:text-slate-600"
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1">
+                                    Просмотры сверх этого лимита не оплачиваются — защищает бюджет от одного вирусного ролика.
+                                </p>
                             </div>
                         </>
                     )}
@@ -285,13 +348,21 @@ export default function OfferWizardModal({ advertiser, onClose, onCreated }) {
                                 {form.requirementsDescription && (
                                     <div className="text-[11px] text-slate-400">{form.requirementsDescription}</div>
                                 )}
+                                {form.mediaKitUrl && (
+                                    <div className="text-[11px] text-slate-500 truncate">Медиа-кит: <span className="text-brand-accent">{form.mediaKitUrl}</span></div>
+                                )}
                                 <div className="grid grid-cols-2 gap-2 pt-2 text-[11px] font-mono">
-                                    <div className="text-slate-500">Списание: <span className="text-white font-bold">${Number(form.advertiserCpmRate).toFixed(2)}</span></div>
-                                    <div className="text-slate-500">Воркеру: <span className="text-white font-bold">${Number(form.workerCpmRate).toFixed(2)}</span></div>
+                                    <div className="text-slate-500">Списание: <span className="text-white font-bold">${advertiserCpmRateNum.toFixed(2)}</span></div>
+                                    <div className="text-slate-500">Воркеру: <span className="text-white font-bold">${computedWorkerCpmRate.toFixed(2)}</span></div>
                                     <div className="text-slate-500">Бюджет: <span className="text-brand-success font-bold">${Number(form.totalBudget).toFixed(2)}</span></div>
                                     <div className="text-slate-500">Порог: <span className="text-brand-accent font-bold">{Number(form.minViewsThreshold).toLocaleString()}</span></div>
                                     <div className="text-slate-500">Мин. ER: <span className="text-white font-bold">{form.minEngagementRate}%</span></div>
                                     <div className="text-slate-500">Холд: <span className="text-amber-400 font-bold">{form.holdPeriodDays} дн.</span></div>
+                                    <div className="text-slate-500 col-span-2">
+                                        Лимит просмотров/видео: <span className="text-white font-bold">
+                                            {form.maxViewsCapPerVideo ? Number(form.maxViewsCapPerVideo).toLocaleString() : 'без ограничения'}
+                                        </span>
+                                    </div>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5 pt-1">
                                     {platforms.filter((p) => form.platformIds.includes(p.id)).map((p) => (

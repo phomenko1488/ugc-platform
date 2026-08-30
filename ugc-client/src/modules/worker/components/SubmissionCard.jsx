@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { ExternalLink, Clock, XCircle, ThumbsUp, Hourglass, ShieldAlert } from 'lucide-react';
 
+// Submission State Machine badges: PENDING_REVIEW (platform hasn't looked at it yet) ->
+// TRACKING (passed platform review, sitting in an active hold the advertiser can still dispute)
+// -> APPROVED (hold expired without a dispute, or a dispute was resolved in the worker's favor —
+// either way HoldSettlementScheduler/SubmissionServiceImpl already paid it out, hence "Выплачено").
 const STATUS_META = {
-    TRACKING: { label: 'В холде', className: 'bg-brand-warning/10 text-brand-warning border-brand-warning/20', icon: Hourglass },
-    PENDING_REVIEW: { label: 'На проверке', className: 'bg-sky-500/10 text-sky-400 border-sky-500/20', icon: Clock },
-    APPROVED: { label: 'Одобрено', className: 'bg-brand-success/10 text-brand-success border-brand-success/20', icon: ThumbsUp },
+    PENDING_REVIEW: { label: 'На проверке платформой', className: 'bg-sky-500/10 text-sky-400 border-sky-500/20', icon: Clock },
+    TRACKING: { label: 'В холде (проверка рекламодателем)', className: 'bg-brand-warning/10 text-brand-warning border-brand-warning/20', icon: Hourglass },
+    APPROVED: { label: 'Выплачено', className: 'bg-brand-success/10 text-brand-success border-brand-success/20', icon: ThumbsUp },
     REJECTED: { label: 'Отклонено', className: 'bg-brand-danger/10 text-brand-danger border-brand-danger/20', icon: XCircle },
     // Advertiser Cabinet's Dispute Flow: an advertiser flagged this submission from the Traffic
     // Inspector; it's paused pending a moderator's approve/reject decision.
@@ -93,8 +97,8 @@ export default function SubmissionCard({ submission }) {
             </div>
 
             <div className="flex items-center justify-between pt-1">
-                <div className="text-[11px] font-mono text-amber-400 font-semibold">
-                    Холд: +${Number(submission.holdAmount || 0).toFixed(2)}
+                <div className={`text-[11px] font-mono font-semibold ${submission.status === 'APPROVED' ? 'text-brand-success' : 'text-amber-400'}`}>
+                    {submission.status === 'APPROVED' ? 'Выплачено' : 'Холд'}: +${Number(submission.holdAmount || 0).toFixed(2)}
                 </div>
                 {remainingLabel && (
                     <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">

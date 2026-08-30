@@ -1,15 +1,15 @@
 package com.platform.ugc.controller.submission;
 
 import com.platform.ugc.dto.ResponseDTO;
+import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.submission.ModerationActionDTO;
 import com.platform.ugc.dto.submission.SubmissionResponseDTO;
+import com.platform.ugc.model.submission.Submission;
 import com.platform.ugc.service.submission.SubmissionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/moderation")
@@ -19,8 +19,12 @@ public class ModerationController {
     private final SubmissionService submissionService;
 
     @GetMapping("/queue")
-    public ResponseEntity<ResponseDTO<List<SubmissionResponseDTO>>> getQueue() {
-        return ResponseEntity.ok(ResponseDTO.ok(submissionService.getPendingReviewQueue()));
+    public ResponseEntity<ResponseDTO<PageResponseDTO<SubmissionResponseDTO>>> getQueue(
+            @RequestParam(required = false) Submission.Status status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size
+    ) {
+        return ResponseEntity.ok(ResponseDTO.ok(submissionService.getPendingReviewQueue(status, page, size)));
     }
 
     @PostMapping("/{id}/approve")

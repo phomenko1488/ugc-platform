@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Wallet2, Send, Loader2, ExternalLink, Eye, Copy, Check, QrCode } from 'lucide-react';
 import { api } from '../../../api';
+import Pagination from '../../../components/Pagination';
 
 const LEDGER_TYPE_LABELS = {
     WORKER_PAYOUT: 'Выплата воркеру',
@@ -27,14 +28,23 @@ export default function AdvertiserBillingPage({ advertiser, onBalanceChanged }) 
     const [depositError, setDepositError] = useState(null);
     const [depositSuccess, setDepositSuccess] = useState(null);
     const [copied, setCopied] = useState(false);
-    const [ledger, setLedger] = useState(null);
+    // null = loading, undefined = unavailable, PageResponseDTO once loaded (same tri-state
+    // convention this page always used, now carrying a page object instead of a bare array).
+    const [ledgerPage, setLedgerPage] = useState(null);
+    const [ledgerPageNum, setLedgerPageNum] = useState(0);
+    const [ledgerPageSize, setLedgerPageSize] = useState(20);
+
+    // Kept as three distinct states (not just `ledgerPage?.content`, which would collapse
+    // "loading" and "unavailable" into the same `undefined`) so the tri-state render below
+    // still tells them apart.
+    const ledger = ledgerPage === null ? null : ledgerPage === undefined ? undefined : ledgerPage.content;
 
     const loadLedger = () => {
         if (!advertiser?.id) return;
-        api.getFinancialLedger(advertiser.id).then(setLedger).catch(() => setLedger(undefined));
+        api.getFinancialLedger(advertiser.id, ledgerPageNum, ledgerPageSize).then(setLedgerPage).catch(() => setLedgerPage(undefined));
     };
 
-    useEffect(loadLedger, [advertiser?.id]);
+    useEffect(loadLedger, [advertiser?.id, ledgerPageNum, ledgerPageSize]);
 
     const handleCopyAddress = () => {
         navigator.clipboard.writeText(DEMO_DEPOSIT_ADDRESS);
@@ -182,6 +192,17 @@ export default function AdvertiserBillingPage({ advertiser, onBalanceChanged }) 
                     </div>
                 )}
             </div>
+
+            {ledgerPage && (
+                <Pagination
+                    currentPage={ledgerPage.pageNumber}
+                    totalPages={ledgerPage.totalPages}
+                    totalElements={ledgerPage.totalElements}
+                    pageSize={ledgerPageSize}
+                    onPageChange={setLedgerPageNum}
+                    onPageSizeChange={(size) => { setLedgerPageSize(size); setLedgerPageNum(0); }}
+                />
+            )}
         </div>
     );
 }

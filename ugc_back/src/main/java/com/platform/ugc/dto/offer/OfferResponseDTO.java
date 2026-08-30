@@ -17,6 +17,7 @@ public record OfferResponseDTO(
         BigDecimal advertiserCpmRate,
         BigDecimal workerCpmRate,
         Long minViewsThreshold,
+        Long maxViewsCapPerVideo,
         BigDecimal minEngagementRate,
         BigDecimal totalBudget,
         BigDecimal remainingBudget,
@@ -24,6 +25,8 @@ public record OfferResponseDTO(
         Boolean isActive,
         Set<PlatformDto> allowedPlatforms,
         Set<GeoDto> targetGeos,
+        String mediaKitUrl,
+        Set<String> brandAssetUrls,
         Instant createdAt
 ) {
     public record PlatformDto(Long id, String code, String displayName) {
@@ -47,6 +50,7 @@ public record OfferResponseDTO(
                 offer.getAdvertiserCpmRate(),
                 offer.getWorkerCpmRate(),
                 offer.getMinViewsThreshold(),
+                offer.getMaxViewsCapPerVideo(),
                 offer.getMinEngagementRate(),
                 offer.getTotalBudget(),
                 offer.getRemainingBudget(),
@@ -54,6 +58,8 @@ public record OfferResponseDTO(
                 offer.getIsActive(),
                 offer.getAllowedPlatforms().stream().map(PlatformDto::fromEntity).collect(Collectors.toSet()),
                 offer.getTargetGeos().stream().map(GeoDto::fromEntity).collect(Collectors.toSet()),
+                offer.getMediaKitUrl(),
+                offer.getBrandAssetUrls(),
                 offer.getCreatedAt()
         );
     }

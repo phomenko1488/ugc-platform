@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
     ArrowLeft, Loader2, Ban, Eye, Clock, Copy, Check, PlusCircle,
     Send, XCircle, Film, Wallet, CheckCircle2, PauseCircle, DollarSign,
+    Download, Image as ImageIcon, FolderArchive,
 } from 'lucide-react';
 import WebApp from '@twa-dev/sdk';
 import { api } from '../../../api';
@@ -227,6 +228,44 @@ export default function WorkerOfferDetailPage({ worker, offerId, onBack }) {
                     </button>
                 </div>
             </div>
+
+            {/* Media Kit & Assets — исходники, звуки, бриф и брендовые ассеты рекламодателя */}
+            {(details.mediaKitUrl || details.brandAssetUrls?.length > 0) && (
+                <div className="bg-brand-card border border-brand-border rounded-2xl p-5 space-y-3">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <FolderArchive className="w-4 h-4 text-brand-accent" />
+                        Материалы для креативов
+                    </h3>
+                    {details.mediaKitUrl && (
+                        <a
+                            href={details.mediaKitUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center justify-center gap-2 bg-brand-accent hover:bg-brand-accentHover text-brand-bg font-bold text-xs py-2.5 rounded-xl transition-all"
+                        >
+                            <Download className="w-4 h-4" />
+                            Скачать пак исходников и звуков
+                        </a>
+                    )}
+                    {details.brandAssetUrls?.length > 0 && (
+                        <div className="space-y-1.5">
+                            <div className="text-[9px] text-slate-500 uppercase font-semibold">Брендовые ассеты</div>
+                            {details.brandAssetUrls.map((url) => (
+                                <a
+                                    key={url}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-2 bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2 text-[11px] text-slate-300 hover:text-brand-accent hover:border-brand-accent/40 transition-colors truncate"
+                                >
+                                    <ImageIcon className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+                                    <span className="truncate font-mono">{url}</span>
+                                </a>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {actionError && (
                 <div className="bg-brand-danger/10 border border-brand-danger/20 text-brand-danger text-xs p-3 rounded-xl">

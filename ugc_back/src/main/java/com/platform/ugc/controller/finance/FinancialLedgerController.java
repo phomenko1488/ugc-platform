@@ -1,6 +1,7 @@
 package com.platform.ugc.controller.finance;
 
 import com.platform.ugc.dto.common.ApiEnvelope;
+import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.finance.FinancialLedgerResponseDTO;
 import com.platform.ugc.service.finance.FinancialLedgerQueryService;
 import lombok.RequiredArgsConstructor;
@@ -9,9 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /**
  * {@code GET /api/v1/users/{userId}/ledger} — the wallet's "История начислений" tab.
@@ -32,7 +32,11 @@ public class FinancialLedgerController {
     private final FinancialLedgerQueryService ledgerQueryService;
 
     @GetMapping("/{userId}/ledger")
-    public ResponseEntity<ApiEnvelope<List<FinancialLedgerResponseDTO>>> getLedger(@PathVariable Long userId) {
-        return ResponseEntity.ok(ApiEnvelope.ok(ledgerQueryService.getLedgerForUser(userId)));
+    public ResponseEntity<ApiEnvelope<PageResponseDTO<FinancialLedgerResponseDTO>>> getLedger(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(ApiEnvelope.ok(ledgerQueryService.getLedgerForUser(userId, page, size)));
     }
 }

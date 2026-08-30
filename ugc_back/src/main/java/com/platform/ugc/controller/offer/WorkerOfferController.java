@@ -1,6 +1,7 @@
 package com.platform.ugc.controller.offer;
 
 import com.platform.ugc.dto.common.ApiEnvelope;
+import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.offer.WorkerOfferDetailsDTO;
 import com.platform.ugc.dto.offer.WorkerOfferSummaryDTO;
 import com.platform.ugc.service.offer.WorkerOfferException;
@@ -15,8 +16,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /**
  * "Взять оффер в работу" — the worker Workbench endpoints.
@@ -69,13 +68,23 @@ public class WorkerOfferController {
     }
 
     @GetMapping("/my")
-    public ResponseEntity<ApiEnvelope<List<WorkerOfferSummaryDTO>>> getMyOffers(@RequestParam Long workerId) {
-        return ResponseEntity.ok(ApiEnvelope.ok(workerOfferService.getMyOffers(workerId)));
+    public ResponseEntity<ApiEnvelope<PageResponseDTO<WorkerOfferSummaryDTO>>> getMyOffers(
+            @RequestParam Long workerId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(ApiEnvelope.ok(workerOfferService.getMyOffers(workerId, page, size)));
     }
 
     @GetMapping("/catalog")
-    public ResponseEntity<ApiEnvelope<List<WorkerOfferSummaryDTO>>> getCatalog(@RequestParam Long workerId) {
-        return ResponseEntity.ok(ApiEnvelope.ok(workerOfferService.getAllOffersForWorker(workerId)));
+    public ResponseEntity<ApiEnvelope<PageResponseDTO<WorkerOfferSummaryDTO>>> getCatalog(
+            @RequestParam Long workerId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String platform,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(ApiEnvelope.ok(workerOfferService.getAllOffersForWorker(workerId, search, platform, page, size)));
     }
 
     @GetMapping("/{offerId}/details")

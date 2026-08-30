@@ -1,9 +1,10 @@
 import React from 'react';
-import { LayoutDashboard, Megaphone, ShieldAlert, Wallet2, X } from 'lucide-react';
+import { LayoutDashboard, Megaphone, ShieldAlert, Wallet2, BarChart3, X } from 'lucide-react';
 
 export const ADVERTISER_TABS = [
     { key: 'dashboard', label: 'Дашборд', icon: LayoutDashboard },
     { key: 'campaigns', label: 'Кампании', icon: Megaphone },
+    { key: 'analytics', label: 'Аналитика', icon: BarChart3 },
     { key: 'traffic', label: 'Трафик', icon: ShieldAlert },
     { key: 'billing', label: 'Биллинг', icon: Wallet2 },
 ];

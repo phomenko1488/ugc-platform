@@ -1,23 +1,31 @@
 package com.platform.ugc.service.offer.impl;
 
+import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.offer.OfferCreateRequestDTO;
 import com.platform.ugc.dto.offer.OfferResponseDTO;
 import com.platform.ugc.model.offer.GeoCountry;
 import com.platform.ugc.model.offer.Offer;
 import com.platform.ugc.model.offer.PlatformEntity;
 import com.platform.ugc.model.user.User;
+import com.platform.ugc.model.setting.PlatformSettings;
 import com.platform.ugc.repository.offer.GeoCountryRepository;
 import com.platform.ugc.repository.offer.OfferRepository;
 import com.platform.ugc.repository.offer.PlatformRepository;
 import com.platform.ugc.repository.user.UserRepository;
 import com.platform.ugc.service.offer.OfferService;
+import com.platform.ugc.service.setting.PlatformSettingsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Set;
 
@@ -30,6 +38,7 @@ public class OfferServiceImpl implements OfferService {
     private final UserRepository userRepository;
     private final PlatformRepository platformRepository;
     private final GeoCountryRepository geoCountryRepository;
+    private final PlatformSettingsService platformSettingsService;
 
     @Override
     @Transactional
@@ -37,9 +46,16 @@ public class OfferServiceImpl implements OfferService {
         User advertiser = userRepository.findByIdWithLock(advertiserId)
                 .orElseThrow(() -> new IllegalArgumentException("Рекламодатель не найден: " + advertiserId));
 
-        if (request.advertiserCpmRate().compareTo(request.workerCpmRate()) <= 0) {
-            throw new IllegalArgumentException("Ставка рекламодателя ($CPM) должна быть строго выше выплаты воркеру.");
-        }
+        // Worker payout is no longer entered by the advertiser — it's derived from the platform's
+        // current margin (PlatformSettings), so the advertiser can only ever set a rate that
+        // nets the platform its configured cut, and the platform's take rate can be tuned without
+        // touching every advertiser's existing offers.
+        PlatformSettings settings = platformSettingsService.getPlatformSettings();
+        BigDecimal marginFraction = settings.getDefaultMarginPercentage()
+                .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
+        BigDecimal workerCpmRate = request.advertiserCpmRate()
+                .multiply(BigDecimal.ONE.subtract(marginFraction))
+                .setScale(4, RoundingMode.HALF_UP);
 
         if (advertiser.getAvailableBalance().compareTo(request.totalBudget()) < 0) {
             throw new IllegalStateException("Недостаточно средств на балансе. Требуется: $" + request.totalBudget());
@@ -63,19 +79,23 @@ public class OfferServiceImpl implements OfferService {
                 .title(request.title().trim())
                 .requirementsDescription(request.requirementsDescription())
                 .advertiserCpmRate(request.advertiserCpmRate())
-                .workerCpmRate(request.workerCpmRate())
+                .workerCpmRate(workerCpmRate)
                 .minViewsThreshold(request.minViewsThreshold())
+                .maxViewsCapPerVideo(request.maxViewsCapPerVideo())
                 .minEngagementRate(request.minEngagementRate() != null ? request.minEngagementRate() : new BigDecimal("2.50"))
                 .totalBudget(request.totalBudget())
                 .remainingBudget(request.totalBudget())
                 .holdPeriodDays(request.holdPeriodDays() != null ? request.holdPeriodDays() : 7)
                 .allowedPlatforms(platforms)
                 .targetGeos(geos)
+                .mediaKitUrl(request.mediaKitUrl() != null ? request.mediaKitUrl().trim() : null)
+                .brandAssetUrls(request.brandAssetUrls() != null ? request.brandAssetUrls() : Set.of())
                 .isActive(true)
                 .build();
 
         Offer saved = offerRepository.save(offer);
-        log.info("Создан оффер [ID: {}, Title: '{}', Budget: ${}]", saved.getId(), saved.getTitle(), saved.getTotalBudget());
+        log.info("Создан оффер [ID: {}, Title: '{}', Budget: ${}, WorkerCPM: ${} (margin {}%)]",
+                saved.getId(), saved.getTitle(), saved.getTotalBudget(), workerCpmRate, settings.getDefaultMarginPercentage());
         return saved;
     }
 
@@ -102,10 +122,11 @@ public class OfferServiceImpl implements OfferService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<OfferResponseDTO> getOffersByAdvertiser(Long advertiserId) {
-        return offerRepository.findAllByAdvertiserId(advertiserId).stream()
-                .map(OfferResponseDTO::fromEntity)
-                .toList();
+    public PageResponseDTO<OfferResponseDTO> getOffersByAdvertiser(Long advertiserId, int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200),
+                Sort.by(Sort.Direction.DESC, "id"));
+        Page<Offer> offers = offerRepository.findAllByAdvertiserId(advertiserId, pageable);
+        return PageResponseDTO.of(offers.map(OfferResponseDTO::fromEntity));
     }
 
     @Override

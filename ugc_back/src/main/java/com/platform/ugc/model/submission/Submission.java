@@ -61,6 +61,12 @@ public class Submission {
     @Builder.Default
     private Long recordedViews = 0L;
 
+    // Views Capping: the view count actually used to compute holdAmount (and, at settlement, the
+    // worker/advertiser payout) when the offer has a maxViewsCapPerVideo — min(recordedViews, cap).
+    // Null means no cap applied at submission time (offer had none set), in which case every
+    // consumer should fall back to recordedViews for backward compatibility with pre-feature rows.
+    private Long payableViews;
+
     @Column(nullable = false)
     @Builder.Default
     private Long recordedLikes = 0L;

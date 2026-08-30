@@ -37,11 +37,14 @@ export default function SubmissionModal({ worker, offer, onClose, onSubmitted })
         ? offer.allowedPlatforms.map((p) => ({ id: p.id, code: p.code, label: p.displayName ?? p.code }))
         : PLATFORM_OPTIONS;
 
+    const viewsCap = offer.maxViewsCapPerVideo ? Number(offer.maxViewsCapPerVideo) : null;
+    const isCapped = viewsCap != null && Number(declaredViews) > viewsCap;
+    const payableViews = viewsCap != null ? Math.min(Number(declaredViews) || 0, viewsCap) : (Number(declaredViews) || 0);
+
     const estimatedHold = useMemo(() => {
-        const views = Number(declaredViews) || 0;
         const rate = Number(offer.workerCpmRate) || 0;
-        return (views * rate) / 1_000_000;
-    }, [declaredViews, offer.workerCpmRate]);
+        return (payableViews * rate) / 1_000_000;
+    }, [payableViews, offer.workerCpmRate]);
 
     const meetsThreshold = Number(declaredViews) >= Number(offer.minViewsThreshold || 0);
 
@@ -144,6 +147,12 @@ export default function SubmissionModal({ worker, offer, onClose, onSubmitted })
                                     Минимальный порог оффера: {Number(offer.minViewsThreshold).toLocaleString()} просмотров
                                 </p>
                             )}
+                            {isCapped && (
+                                <p className="text-[11px] text-amber-400 mt-1.5 flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3 shrink-0" />
+                                    Кампания оплачивает максимум {viewsCap.toLocaleString()} просмотров. Ваш расчетный холд ограничен.
+                                </p>
+                            )}
                         </div>
 
                         <div>
@@ -155,7 +164,7 @@ export default function SubmissionModal({ worker, offer, onClose, onSubmitted })
                             <div>
                                 <div className="text-[10px] text-slate-400 uppercase font-semibold tracking-wide">Расчетный холд</div>
                                 <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                    {Number(declaredViews || 0).toLocaleString()} × ${Number(offer.workerCpmRate).toFixed(2)} / 1M
+                                    {payableViews.toLocaleString()}{isCapped ? ' (капа)' : ''} × ${Number(offer.workerCpmRate).toFixed(2)} / 1M
                                 </div>
                             </div>
                             <div className="text-xl font-bold font-mono text-brand-success">

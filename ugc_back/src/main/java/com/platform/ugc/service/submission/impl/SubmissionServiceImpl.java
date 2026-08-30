@@ -1,6 +1,7 @@
 package com.platform.ugc.service.submission.impl;
 
 import com.platform.ugc.adapter.stats.DynamicStatsProviderRegistry;
+import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.submission.SubmissionCreateRequestDTO;
 import com.platform.ugc.dto.submission.SubmissionResponseDTO;
 import com.platform.ugc.model.offer.Offer;
@@ -12,10 +13,16 @@ import com.platform.ugc.repository.offer.OfferRepository;
 import com.platform.ugc.repository.offer.PlatformRepository;
 import com.platform.ugc.repository.submission.SubmissionRepository;
 import com.platform.ugc.repository.user.UserRepository;
+import com.platform.ugc.email.EmailService;
 import com.platform.ugc.service.finance.FinancialSettlementEngine;
 import com.platform.ugc.service.submission.SubmissionService;
+import com.platform.ugc.telegram.TelegramNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +46,12 @@ public class SubmissionServiceImpl implements SubmissionService {
     private final PlatformRepository platformRepository;
     private final DynamicStatsProviderRegistry statsRegistry;
     private final FinancialSettlementEngine settlementEngine;
+    private final TelegramNotificationService telegramNotificationService;
+    private final EmailService emailService;
+
+    // Advertiser Telegram/email low-budget alert fires once remaining budget drops under this
+    // share of the offer's total budget.
+    private static final BigDecimal LOW_BUDGET_THRESHOLD_PERCENT = new BigDecimal("15");
 
     @Override
     @Transactional
@@ -85,12 +98,22 @@ public class SubmissionServiceImpl implements SubmissionService {
             throw new IllegalArgumentException(String.format("Просмотров (%d) меньше порога (%d)", actualViews, offer.getMinViewsThreshold()));
         }
 
-        BigDecimal holdAmount = BigDecimal.valueOf(actualViews)
+        // Views Capping: a single video's payable views are clamped to the offer's
+        // maxViewsCapPerVideo (when set) before the hold is computed — the raw, uncapped
+        // actualViews is still what's recorded/shown as the video's real performance.
+        long payableViews = offer.getMaxViewsCapPerVideo() != null
+                ? Math.min(actualViews, offer.getMaxViewsCapPerVideo())
+                : actualViews;
+
+        BigDecimal holdAmount = BigDecimal.valueOf(payableViews)
                 .multiply(offer.getWorkerCpmRate())
                 .divide(BigDecimal.valueOf(1_000_000), 4, RoundingMode.HALF_UP);
 
+        // If the (already-capped) hold still exceeds what's left of the offer's budget, clamp the
+        // hold to the remaining budget rather than rejecting the submission outright — the worker
+        // still gets a hold, just capped at whatever the advertiser has left to spend.
         if (offer.getRemainingBudget().compareTo(holdAmount) < 0) {
-            throw new IllegalStateException("Бюджет оффера исчерпан.");
+            holdAmount = offer.getRemainingBudget();
         }
 
         offer.setRemainingBudget(offer.getRemainingBudget().subtract(holdAmount));
@@ -107,6 +130,7 @@ public class SubmissionServiceImpl implements SubmissionService {
                 .externalVideoId(externalVideoId)
                 .authorChannelName(stats.author())
                 .recordedViews(actualViews)
+                .payableViews(payableViews)
                 .recordedLikes(stats.likes())
                 .recordedComments(stats.comments())
                 .currentEngagementRate(stats.engagementRate())
@@ -117,7 +141,26 @@ public class SubmissionServiceImpl implements SubmissionService {
                 .lastSynchronizedAt(Instant.now())
                 .build();
 
-        return submissionRepository.save(submission);
+        Submission saved = submissionRepository.save(submission);
+
+        telegramNotificationService.notifyAdvertiserNewSubmission(saved);
+        notifyIfBudgetLow(offer);
+
+        return saved;
+    }
+
+    /** Fires the advertiser's low-budget Telegram push + email once remaining budget drops under {@link #LOW_BUDGET_THRESHOLD_PERCENT}. */
+    private void notifyIfBudgetLow(Offer offer) {
+        if (offer.getTotalBudget() == null || offer.getTotalBudget().signum() <= 0) {
+            return;
+        }
+        BigDecimal remainingPercent = offer.getRemainingBudget()
+                .multiply(BigDecimal.valueOf(100))
+                .divide(offer.getTotalBudget(), 4, RoundingMode.HALF_UP);
+        if (remainingPercent.compareTo(LOW_BUDGET_THRESHOLD_PERCENT) < 0) {
+            telegramNotificationService.notifyAdvertiserLowBudget(offer);
+            emailService.sendLowBudgetAlert(offer.getAdvertiser(), offer);
+        }
     }
 
     @Override
@@ -135,10 +178,12 @@ public class SubmissionServiceImpl implements SubmissionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<SubmissionResponseDTO> getWorkerSubmissions(Long workerId) {
-        return submissionRepository.findAllByWorkerIdOrderByCreatedAtDesc(workerId).stream()
-                .map(SubmissionResponseDTO::fromEntity)
-                .toList();
+    public PageResponseDTO<SubmissionResponseDTO> getWorkerSubmissions(Long workerId, Submission.Status status,
+                                                                        Long campaignId, int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Submission> submissions = submissionRepository.findAllByWorkerId(workerId, status, campaignId, pageable);
+        return PageResponseDTO.of(submissions.map(SubmissionResponseDTO::fromEntity));
     }
 
     @Override
@@ -158,47 +203,75 @@ public class SubmissionServiceImpl implements SubmissionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<SubmissionResponseDTO> getPendingReviewQueue() {
-        return submissionRepository.findAllByStatusOrderByCreatedAtAsc(Submission.Status.PENDING_REVIEW).stream()
-                .map(SubmissionResponseDTO::fromEntity)
-                .toList();
+    public PageResponseDTO<SubmissionResponseDTO> getPendingReviewQueue(Submission.Status status, int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200),
+                Sort.by(Sort.Direction.ASC, "createdAt"));
+        Page<Submission> submissions = status != null
+                ? submissionRepository.findAllByStatus(status, pageable)
+                : submissionRepository.findAllByStatusIn(
+                        List.of(Submission.Status.PENDING_REVIEW, Submission.Status.DISPUTED), pageable);
+        return PageResponseDTO.of(submissions.map(SubmissionResponseDTO::fromEntity));
     }
 
     @Override
     @Transactional
-    public void approveSubmission(Long submissionId, String moderationComment) {
+    public void disputeSubmission(Long submissionId, Long advertiserId, String reason, String comment) {
         Submission submission = submissionRepository.findByIdWithLock(submissionId)
-                .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена: " + submissionId));
+                .orElseThrow(() -> new IllegalArgumentException("Сабмит не найден: " + submissionId));
 
-        if (submission.getStatus() != Submission.Status.PENDING_REVIEW &&
-                submission.getStatus() != Submission.Status.TRACKING &&
-                submission.getStatus() != Submission.Status.DISPUTED) {
-            throw new IllegalStateException("Некорректный статус для одобрения: " + submission.getStatus());
+        // 1. Проверка прав рекламодателя
+        if (!submission.getOffer().getAdvertiser().getId().equals(advertiserId)) {
+            throw new AccessDeniedException("Вы не являетесь владельцем этой кампании.");
         }
 
-        submission.setStatus(Submission.Status.APPROVED);
-        submission.setModerationComment(moderationComment);
+        // 2. Оспорить можно ТОЛЬКО ролик, уже прошедший первичную модерацию платформы и
+        // находящийся в активном холде (TRACKING) — это и есть окно проверки рекламодателем до
+        // автоматической разморозки HoldSettlementScheduler'ом. PENDING_REVIEW еще не прошел
+        // модерацию платформы, APPROVED/PAID — выплата уже ушла, REJECTED/DISPUTED — терминальные
+        // состояния для этого действия.
+        switch (submission.getStatus()) {
+            case TRACKING -> { /* holding window is open — dispute allowed */ }
+            case PENDING_REVIEW -> throw new IllegalStateException(
+                    "Ролик еще не прошел первичную модерацию платформы — дождитесь перевода в холд, чтобы оспорить его.");
+            case APPROVED, PAID -> throw new IllegalStateException(
+                    "Невозможно оспорить ролик: срок холда истек, выплата уже переведена на баланс воркера.");
+            case REJECTED -> throw new IllegalStateException("Ролик уже был отклонен модерацией.");
+            case DISPUTED -> throw new IllegalStateException("По этому ролику уже открыт активный спор.");
+        }
 
-        settlementEngine.executeSettlement(submission);
+        // 3. Перевод в статус спора — с этого момента HoldSettlementScheduler больше не видит эту
+        // заявку (он выбирает только TRACKING), так что таймер авторазморозки эффективно
+        // приостановлен до решения модератора.
+        submission.setStatus(Submission.Status.DISPUTED);
+        submission.setDisputeCategory(reason);
+        submission.setDisputeComment(comment);
+        submission.setDisputedAt(Instant.now());
         submissionRepository.save(submission);
+        telegramNotificationService.notifyModeratorsNewDispute(submission);
+        log.info("Submission #{} disputed by advertiser {}. Reason: {}", submissionId, advertiserId, reason);
     }
 
     @Override
     @Transactional
     public void rejectSubmission(Long submissionId, String rejectionReason) {
         Submission submission = submissionRepository.findByIdWithLock(submissionId)
-                .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена: " + submissionId));
+                .orElseThrow(() -> new IllegalArgumentException("Сабмит не найден: " + submissionId));
 
+        // Отклонить можно только то, что ещё не было выплачено (находится в холде или на рассмотрении)
         if (submission.getStatus() == Submission.Status.APPROVED || submission.getStatus() == Submission.Status.PAID) {
-            throw new IllegalStateException("Нельзя отклонить уже одобренную заявку.");
+            throw new IllegalStateException("Нельзя отклонить уже выплаченный ролик.");
+        }
+
+        if (submission.getStatus() == Submission.Status.REJECTED) {
+            return; // Идемпотентность
         }
 
         User worker = userRepository.findByIdWithLock(submission.getWorker().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Воркер не найден"));
-
         Offer offer = offerRepository.findByIdWithLock(submission.getOffer().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Оффер не найден"));
 
+        // Возвращаем замороженные средства рекламодателю в бюджет оффера
         worker.setHoldBalance(worker.getHoldBalance().subtract(submission.getHoldAmount()));
         offer.setRemainingBudget(offer.getRemainingBudget().add(submission.getHoldAmount()));
 
@@ -208,37 +281,63 @@ public class SubmissionServiceImpl implements SubmissionService {
         submission.setStatus(Submission.Status.REJECTED);
         submission.setModerationComment(rejectionReason);
         submissionRepository.save(submission);
+        log.info("Submission #{} rejected. Hold ${} returned to offer budget.", submissionId, submission.getHoldAmount());
     }
 
+    /**
+     * Multi-stage CPA-network approval, replacing the old "one approve = one payout" flow:
+     * <ul>
+     *     <li>{@code PENDING_REVIEW} (platform's first look): moves to {@code TRACKING} and opens
+     *     the hold window. No money moves yet — it stays in the worker's {@code holdBalance}
+     *     until {@link HoldSettlementScheduler} auto-settles it, or the advertiser disputes it
+     *     first.</li>
+     *     <li>{@code DISPUTED} (moderator resolves in the worker's favor): settles immediately,
+     *     same as the scheduler would have, rather than making the worker wait out a hold that's
+     *     already been contested and resolved.</li>
+     *     <li>{@code TRACKING} (moderator manually fast-tracks a submission still inside its hold
+     *     window): same immediate-settlement path as a resolved dispute — an explicit override of
+     *     the scheduler for cases like an advertiser asking to expedite a payout.</li>
+     * </ul>
+     */
     @Override
     @Transactional
-    public void disputeSubmission(Long submissionId, Long advertiserId, String category, String comment) {
+    public void approveSubmission(Long submissionId, String moderationComment) {
         Submission submission = submissionRepository.findByIdWithLock(submissionId)
-                .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена: " + submissionId));
+                .orElseThrow(() -> new IllegalArgumentException("Сабмит не найден: " + submissionId));
 
-        if (!submission.getOffer().getAdvertiser().getId().equals(advertiserId)) {
-            throw new AccessDeniedException("Нет доступа к этой заявке.");
+        if (submission.getStatus() == Submission.Status.PENDING_REVIEW) {
+            submission.setStatus(Submission.Status.TRACKING);
+            submission.setHoldExpiresAt(Instant.now().plus(submission.getOffer().getHoldPeriodDays(), ChronoUnit.DAYS));
+            submission.setModerationComment("Одобрено первичной модерацией. Переведено в холд");
+            submissionRepository.save(submission);
+            telegramNotificationService.notifyWorkerModeratorApproved(submission);
+            log.info("Submission #{} passed platform review -> TRACKING, hold expires at {}",
+                    submissionId, submission.getHoldExpiresAt());
+            return;
         }
 
-        if (submission.getStatus() == Submission.Status.REJECTED
-                || submission.getStatus() == Submission.Status.PAID
-                || submission.getStatus() == Submission.Status.DISPUTED) {
-            throw new IllegalStateException("Нельзя оспорить заявку в статусе: " + submission.getStatus());
+        if (submission.getStatus() == Submission.Status.DISPUTED || submission.getStatus() == Submission.Status.TRACKING) {
+            Submission.Status previousStatus = submission.getStatus();
+            submission.setStatus(Submission.Status.APPROVED);
+            submission.setModerationComment(moderationComment);
+            // Финансовый расчет и перевод средств с холда на свободный баланс воркера
+            settlementEngine.executeSettlement(submission);
+            submissionRepository.save(submission);
+            log.info("Submission #{} approved ({} -> APPROVED). Payout settled to worker.",
+                    submissionId, previousStatus);
+            return;
         }
 
-        submission.setStatus(Submission.Status.DISPUTED);
-        submission.setDisputeCategory(category);
-        submission.setDisputeComment(comment);
-        submission.setDisputedAt(Instant.now());
-        submissionRepository.save(submission);
+        throw new IllegalStateException("Недопустимый статус для одобрения: " + submission.getStatus());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<SubmissionResponseDTO> getAdvertiserTraffic(Long advertiserId, Submission.Status statusFilter) {
-        return submissionRepository.findAllByOffer_AdvertiserIdOrderByCreatedAtDesc(advertiserId).stream()
-                .filter(s -> statusFilter == null || s.getStatus() == statusFilter)
-                .map(SubmissionResponseDTO::fromEntity)
-                .toList();
+    public PageResponseDTO<SubmissionResponseDTO> getAdvertiserTraffic(Long advertiserId, Submission.Status statusFilter,
+                                                                        int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Submission> submissions = submissionRepository.findAllByOfferAdvertiserId(advertiserId, statusFilter, pageable);
+        return PageResponseDTO.of(submissions.map(SubmissionResponseDTO::fromEntity));
     }
 }

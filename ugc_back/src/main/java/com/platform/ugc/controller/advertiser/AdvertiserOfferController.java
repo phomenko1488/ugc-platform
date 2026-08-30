@@ -1,6 +1,7 @@
 package com.platform.ugc.controller.advertiser;
 
 import com.platform.ugc.dto.ResponseDTO;
+import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.advertiser.AdvertiserOfferDetailsDTO;
 import com.platform.ugc.dto.advertiser.DepositRequestDTO;
 import com.platform.ugc.dto.submission.SubmissionResponseDTO;
@@ -11,8 +12,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * Advertiser Cabinet routes that don't fit neatly under {@code OfferController} or
@@ -47,11 +46,13 @@ public class AdvertiserOfferController {
     }
 
     @GetMapping("/traffic")
-    public ResponseEntity<ResponseDTO<List<SubmissionResponseDTO>>> getTraffic(
+    public ResponseEntity<ResponseDTO<PageResponseDTO<SubmissionResponseDTO>>> getTraffic(
             @PathVariable Long advertiserId,
-            @RequestParam(required = false) Submission.Status status
+            @RequestParam(required = false) Submission.Status status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
-        return ResponseEntity.ok(ResponseDTO.ok(submissionService.getAdvertiserTraffic(advertiserId, status)));
+        return ResponseEntity.ok(ResponseDTO.ok(submissionService.getAdvertiserTraffic(advertiserId, status, page, size)));
     }
 
     @PostMapping("/deposit")

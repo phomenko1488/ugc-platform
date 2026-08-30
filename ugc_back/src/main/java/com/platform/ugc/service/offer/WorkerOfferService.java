@@ -1,5 +1,6 @@
 package com.platform.ugc.service.offer;
 
+import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.offer.WorkerOfferDetailsDTO;
 import com.platform.ugc.dto.offer.WorkerOfferSubmissionDTO;
 import com.platform.ugc.dto.offer.WorkerOfferSummaryDTO;
@@ -13,6 +14,10 @@ import com.platform.ugc.repository.submission.WorkerOfferStatsRepository;
 import com.platform.ugc.repository.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -86,35 +91,41 @@ public class WorkerOfferService {
     }
 
     @Transactional(readOnly = true)
-    public List<WorkerOfferSummaryDTO> getMyOffers(Long workerId) {
-        return assignmentRepository.findAllByWorkerIdAndIsActiveTrue(workerId).stream()
-                .map(assignment -> {
-                    Offer offer = assignment.getOffer();
-                    OfferStats stats = computeStats(workerId, offer.getId());
-                    return WorkerOfferSummaryDTO.taken(
-                            offer,
-                            assignment.getJoinedAt(),
-                            stats.count(),
-                            stats.holdTotal(),
-                            stats.approvedTotal()
-                    );
-                })
-                .collect(Collectors.toList());
+    public PageResponseDTO<WorkerOfferSummaryDTO> getMyOffers(Long workerId, int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200),
+                Sort.by(Sort.Direction.DESC, "id"));
+        Page<WorkerOfferAssignment> assignments = assignmentRepository.findAllByWorkerIdAndIsActiveTrue(workerId, pageable);
+        return PageResponseDTO.of(assignments.map(assignment -> {
+            Offer offer = assignment.getOffer();
+            OfferStats stats = computeStats(workerId, offer.getId());
+            return WorkerOfferSummaryDTO.taken(
+                    offer,
+                    assignment.getJoinedAt(),
+                    stats.count(),
+                    stats.holdTotal(),
+                    stats.approvedTotal()
+            );
+        }));
     }
 
     @Transactional(readOnly = true)
-    public List<WorkerOfferSummaryDTO> getAllOffersForWorker(Long workerId) {
+    public PageResponseDTO<WorkerOfferSummaryDTO> getAllOffersForWorker(Long workerId, String search, String platform,
+                                                                         int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200),
+                Sort.by(Sort.Direction.DESC, "id"));
+        String normalizedSearch = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
+        String normalizedPlatform = (platform != null && !platform.isBlank() && !"ALL".equalsIgnoreCase(platform))
+                ? platform.trim().toUpperCase() : null;
+
+        // Kept as its own small, unpaginated fetch: a worker's own set of taken offers is bounded
+        // by how many campaigns one person can realistically work on at once, unlike the catalog
+        // itself — nowhere near the "thousands of rows" scale this initiative targets.
         Set<Long> takenOfferIds = assignmentRepository.findAllByWorkerIdAndIsActiveTrue(workerId).stream()
                 .map(assignment -> assignment.getOffer().getId())
                 .collect(Collectors.toSet());
 
-        // Filtered in Java rather than via a repository method — this delivery couldn't confirm
-        // whether OfferRepository already exposes an "active only" finder, so it only relies on
-        // JpaRepository's guaranteed findAll().
-        return offerRepository.findAll().stream()
-                .filter(Offer::getIsActive)
-                .map(offer -> WorkerOfferSummaryDTO.catalogEntry(offer, takenOfferIds.contains(offer.getId())))
-                .collect(Collectors.toList());
+        Page<Offer> offers = offerRepository.findActiveCatalog(normalizedSearch, normalizedPlatform, pageable);
+        return PageResponseDTO.of(offers.map(offer -> WorkerOfferSummaryDTO.catalogEntry(offer, takenOfferIds.contains(offer.getId()))));
     }
 
     /**
@@ -159,6 +170,7 @@ public class WorkerOfferService {
                 offer.getAdvertiserCpmRate(),
                 offer.getWorkerCpmRate(),
                 offer.getMinViewsThreshold(),
+                offer.getMaxViewsCapPerVideo(),
                 offer.getMinEngagementRate(),
                 offer.getTotalBudget(),
                 offer.getRemainingBudget(),
@@ -167,6 +179,8 @@ public class WorkerOfferService {
                 offer.getTargetGeos(),
                 offer.getIsActive(),
                 offer.getCreatedAt(),
+                offer.getMediaKitUrl(),
+                offer.getBrandAssetUrls(),
                 isTaken,
                 joinedAt,
                 submissionsCount,

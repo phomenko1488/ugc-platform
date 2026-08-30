@@ -2,10 +2,16 @@ package com.platform.ugc.controller.auth;
 
 import com.platform.ugc.dto.auth.AuthResponseDTO;
 import com.platform.ugc.dto.auth.AuthUserDTO;
+import com.platform.ugc.dto.auth.ForgotPasswordRequestDTO;
 import com.platform.ugc.dto.auth.LoginRequestDTO;
 import com.platform.ugc.dto.auth.RefreshRequestDTO;
+import com.platform.ugc.dto.auth.RegisterRequestDTO;
+import com.platform.ugc.dto.auth.ResetPasswordRequestDTO;
 import com.platform.ugc.dto.auth.TelegramAuthRequestDTO;
 import com.platform.ugc.dto.common.ApiEnvelope;
+import com.platform.ugc.dto.user.UserCreateRequestDTO;
+import com.platform.ugc.email.EmailService;
+import com.platform.ugc.model.auth.OneTimeToken;
 import com.platform.ugc.model.user.Role;
 import com.platform.ugc.model.user.User;
 import com.platform.ugc.repository.user.UserRepository;
@@ -13,9 +19,13 @@ import com.platform.ugc.security.JwtService;
 import com.platform.ugc.security.TelegramAuthException;
 import com.platform.ugc.security.TelegramAuthService;
 import com.platform.ugc.security.TelegramInitData;
+import com.platform.ugc.service.auth.OneTimeTokenService;
+import com.platform.ugc.service.user.UserService;
 import io.jsonwebtoken.Claims;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -48,6 +59,74 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final TelegramAuthService telegramAuthService;
+    private final UserService userService;
+    private final OneTimeTokenService oneTimeTokenService;
+    private final EmailService emailService;
+
+    @Value("${app.auth.password-reset-ttl-minutes:60}")
+    private long passwordResetTtlMinutes;
+
+    /**
+     * Public self-registration. Only ROLE_ADVERTISER and ROLE_PARTNER may register this way —
+     * Workers register implicitly via the Telegram bot/WebApp, Moderator/Admin accounts are
+     * admin-provisioned. Issues tokens immediately (like /login) so the frontend can log the new
+     * account straight in, and fires a welcome email off-thread.
+     */
+    @PostMapping("/register")
+    public ResponseEntity<ApiEnvelope<AuthResponseDTO>> register(@Valid @RequestBody RegisterRequestDTO request) {
+        if (request.role() != Role.ROLE_ADVERTISER && request.role() != Role.ROLE_PARTNER) {
+            return ResponseEntity.badRequest().body(ApiEnvelope.error(
+                    "Публичная регистрация доступна только для рекламодателя или партнера."));
+        }
+
+        try {
+            User user = userService.registerUser(new UserCreateRequestDTO(
+                    null,
+                    request.email(),
+                    request.password(),
+                    request.username(),
+                    request.role(),
+                    request.refTag()
+            ));
+            emailService.sendWelcomeEmail(user);
+            return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.ok(issueTokens(user)));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(ApiEnvelope.error(e.getMessage()));
+        }
+    }
+
+    /**
+     * Always responds with a generic success message regardless of whether the email is
+     * registered — otherwise this endpoint would let anyone enumerate which emails have accounts.
+     */
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiEnvelope<String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequestDTO request) {
+        userRepository.findByEmail(request.email().trim().toLowerCase())
+                .filter(u -> u.getPasswordHash() != null) // Telegram-only accounts have no password to reset.
+                .ifPresent(user -> {
+                    String token = oneTimeTokenService.issue(user, OneTimeToken.Purpose.PASSWORD_RESET,
+                            Duration.ofMinutes(passwordResetTtlMinutes));
+                    emailService.sendPasswordResetEmail(user, token);
+                });
+
+        return ResponseEntity.ok(ApiEnvelope.ok("Если такой email зарегистрирован, на него отправлена ссылка для сброса пароля."));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiEnvelope<String>> resetPassword(@Valid @RequestBody ResetPasswordRequestDTO request) {
+        Optional<User> userOpt = oneTimeTokenService.consume(request.token(), OneTimeToken.Purpose.PASSWORD_RESET);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiEnvelope.error("Ссылка сброса пароля недействительна или устарела."));
+        }
+
+        User user = userOpt.get();
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+        log.info("Password reset completed for user [ID: {}]", user.getId());
+
+        return ResponseEntity.ok(ApiEnvelope.ok("Пароль успешно изменен."));
+    }
 
     @PostMapping("/login")
     public ResponseEntity<ApiEnvelope<AuthResponseDTO>> login(@RequestBody LoginRequestDTO request) {

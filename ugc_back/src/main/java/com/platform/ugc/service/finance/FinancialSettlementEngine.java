@@ -8,6 +8,7 @@ import com.platform.ugc.model.user.ReferralTerms;
 import com.platform.ugc.model.user.User;
 import com.platform.ugc.repository.finance.FinancialLedgerRepository;
 import com.platform.ugc.repository.user.UserRepository;
+import com.platform.ugc.telegram.TelegramNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,7 @@ public class FinancialSettlementEngine {
 
     private final UserRepository userRepository;
     private final FinancialLedgerRepository ledgerRepository;
+    private final TelegramNotificationService telegramNotificationService;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void executeSettlement(Submission submission) {
@@ -31,7 +33,14 @@ public class FinancialSettlementEngine {
         User worker = submission.getWorker();
         User advertiser = offer.getAdvertiser();
 
-        BigDecimal viewsInMillions = BigDecimal.valueOf(submission.getRecordedViews())
+        // Views Capping: settle on payableViews (recordedViews clamped to the offer's
+        // maxViewsCapPerVideo at submission time) so the final payout honors the same cap the hold
+        // was computed with. payableViews is null only for rows created before this feature
+        // existed, which fall back to the uncapped recordedViews they were always settled on.
+        long settlementViews = submission.getPayableViews() != null
+                ? submission.getPayableViews()
+                : submission.getRecordedViews();
+        BigDecimal viewsInMillions = BigDecimal.valueOf(settlementViews)
                 .divide(BigDecimal.valueOf(1_000_000), 6, RoundingMode.HALF_UP);
 
         BigDecimal grossAdvertiserCost = viewsInMillions.multiply(offer.getAdvertiserCpmRate());
@@ -54,6 +63,7 @@ public class FinancialSettlementEngine {
         }
         userRepository.save(worker);
         recordLedger(worker, submission, FinancialLedgerEntry.EntryType.WORKER_PAYOUT, workerPayout, "Выплата за видео #" + submission.getExternalVideoId());
+        telegramNotificationService.notifyWorkerHoldReleased(submission);
 
         // 2. Начисление B2C рефереру
         if (worker.getB2cReferrer() != null && b2cCommission.compareTo(BigDecimal.ZERO) > 0) {
@@ -71,6 +81,7 @@ public class FinancialSettlementEngine {
             partner.setAvailableBalance(partner.getAvailableBalance().add(b2bCommission));
             userRepository.save(partner);
             recordLedger(partner, submission, FinancialLedgerEntry.EntryType.B2B_PARTNER_COMMISSION, b2bCommission, "B2B Комиссия за рекламодателя");
+            telegramNotificationService.notifyPartnerRevShare(partner, b2bCommission, advertiser);
         }
 
         log.info("Клиринг заявки [ID: {}] завершен. Gross: ${}, Worker: ${}, Margin: ${}",

@@ -1,11 +1,59 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ArrowLeft, Loader2, Eye, Clock, DollarSign, Users, Film,
-    CheckCircle2, PauseCircle, PlusCircle, StopCircle,
+    CheckCircle2, PauseCircle, PlayCircle, PlusCircle, StopCircle, AlertTriangle, X,
 } from 'lucide-react';
 import { api } from '../../../api';
 import SubmissionCard from '../../worker/components/SubmissionCard';
 import TopUpModal from '../components/TopUpModal';
+
+/**
+ * Confirming modal for the destructive, irreversible "stop campaign" action — shows the exact
+ * refund amount up front instead of a bare window.confirm() so the advertiser knows what they're
+ * getting back before committing.
+ */
+function StopCampaignModal({ title, refundAmount, stopping, onConfirm, onCancel }) {
+    return (
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center">
+            <div className="bg-brand-card border border-brand-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl">
+                <div className="px-5 py-4 flex items-start justify-between gap-3 border-b border-brand-border">
+                    <div className="flex items-center gap-2 text-brand-danger">
+                        <AlertTriangle className="w-4.5 h-4.5" />
+                        <span className="text-sm font-bold">Остановить кампанию?</span>
+                    </div>
+                    <button onClick={onCancel} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+                <div className="p-5 space-y-3">
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                        Кампания «<span className="font-semibold text-white">{title}</span>» будет закрыта, приём новых видео прекратится немедленно. Это действие необратимо.
+                    </p>
+                    <div className="bg-brand-bg border border-brand-border rounded-xl px-3.5 py-3 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-400">Вернётся на баланс</span>
+                        <span className="text-base font-bold font-mono text-brand-success">${Number(refundAmount).toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                        <button
+                            onClick={onCancel}
+                            className="flex-1 text-xs font-semibold text-slate-300 hover:text-white bg-brand-bg border border-brand-border rounded-xl py-2.5 transition-colors"
+                        >
+                            Отмена
+                        </button>
+                        <button
+                            onClick={onConfirm}
+                            disabled={stopping}
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-brand-danger hover:bg-brand-danger/90 disabled:opacity-40 rounded-xl py-2.5 transition-colors"
+                        >
+                            {stopping && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            {stopping ? 'Останавливаем...' : `Остановить и вернуть $${Number(refundAmount).toFixed(2)}`}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 /**
  * Campaign Detail Hub — offer info, workers currently in work, submission funnel counts, and the
@@ -18,6 +66,8 @@ export default function AdvertiserCampaignDetailPage({ advertiser, offerId, onBa
     const [submissions, setSubmissions] = useState(null);
     const [loadError, setLoadError] = useState(null);
     const [stopping, setStopping] = useState(false);
+    const [showStopConfirm, setShowStopConfirm] = useState(false);
+    const [togglingStatus, setTogglingStatus] = useState(false);
     const [showTopUp, setShowTopUp] = useState(false);
 
     const load = useCallback(async () => {
@@ -42,17 +92,30 @@ export default function AdvertiserCampaignDetailPage({ advertiser, offerId, onBa
     }, [load]);
 
     const handleStop = async () => {
-        const confirmed = window.confirm(`Остановить кампанию «${details?.title}»? Неиспользованный бюджет вернётся на баланс.`);
-        if (!confirmed) return;
         setStopping(true);
         try {
             await api.stopOffer(advertiser.id, offerId);
+            setShowStopConfirm(false);
             await load();
             onBalanceChanged?.();
         } catch (err) {
             setLoadError(err.message || 'Не удалось остановить кампанию');
         } finally {
             setStopping(false);
+        }
+    };
+
+    // Pause/resume never touches the budget — only the Stop flow above does that (with a refund).
+    const handleToggleStatus = async () => {
+        setTogglingStatus(true);
+        try {
+            await api.setOfferStatus(offerId, advertiser.id, !details.isActive);
+            await load();
+            onBalanceChanged?.();
+        } catch (err) {
+            setLoadError(err.message || 'Не удалось изменить статус кампании');
+        } finally {
+            setTogglingStatus(false);
         }
     };
 
@@ -150,14 +213,31 @@ export default function AdvertiserCampaignDetailPage({ advertiser, offerId, onBa
                         <PlusCircle className="w-4 h-4" />
                         Пополнить бюджет
                     </button>
+                    <button
+                        onClick={handleToggleStatus}
+                        disabled={togglingStatus}
+                        className="flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 px-4 rounded-xl border transition-colors disabled:opacity-40 bg-brand-bg border-brand-border text-slate-300 hover:border-brand-accent/40 hover:text-brand-accent"
+                    >
+                        {togglingStatus ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : details.isActive ? (
+                            <PauseCircle className="w-4 h-4" />
+                        ) : (
+                            <PlayCircle className="w-4 h-4" />
+                        )}
+                        {togglingStatus
+                            ? 'Обновляем...'
+                            : details.isActive
+                                ? 'Поставить на паузу'
+                                : 'Возобновить приём видео'}
+                    </button>
                     {details.isActive && (
                         <button
-                            onClick={handleStop}
-                            disabled={stopping}
-                            className="flex items-center justify-center gap-1.5 text-brand-danger hover:bg-brand-danger/10 text-xs font-bold py-2.5 px-4 rounded-xl border border-brand-danger/30 transition-colors disabled:opacity-40"
+                            onClick={() => setShowStopConfirm(true)}
+                            className="flex items-center justify-center gap-1.5 text-brand-danger hover:bg-brand-danger/10 text-xs font-bold py-2.5 px-4 rounded-xl border border-brand-danger/30 transition-colors"
                         >
                             <StopCircle className="w-4 h-4" />
-                            {stopping ? 'Останавливаем...' : 'Остановить кампанию'}
+                            Остановить кампанию и вернуть остаток бюджета (${Number(details.remainingBudget).toFixed(2)})
                         </button>
                     )}
                 </div>
@@ -250,6 +330,16 @@ export default function AdvertiserCampaignDetailPage({ advertiser, offerId, onBa
                         load();
                         onBalanceChanged?.();
                     }}
+                />
+            )}
+
+            {showStopConfirm && (
+                <StopCampaignModal
+                    title={details.title}
+                    refundAmount={details.remainingBudget}
+                    stopping={stopping}
+                    onConfirm={handleStop}
+                    onCancel={() => setShowStopConfirm(false)}
                 />
             )}
         </div>

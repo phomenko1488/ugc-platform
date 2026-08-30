@@ -1,6 +1,7 @@
 package com.platform.ugc.controller.submission;
 
 import com.platform.ugc.dto.ResponseDTO;
+import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.submission.DisputeRequestDTO;
 import com.platform.ugc.dto.submission.SubmissionCreateRequestDTO;
 import com.platform.ugc.dto.submission.SubmissionResponseDTO;
@@ -31,10 +32,14 @@ public class SubmissionController {
     }
 
     @GetMapping("/worker/{workerId}")
-    public ResponseEntity<ResponseDTO<List<SubmissionResponseDTO>>> getWorkerSubmissions(
-            @PathVariable Long workerId
+    public ResponseEntity<ResponseDTO<PageResponseDTO<SubmissionResponseDTO>>> getWorkerSubmissions(
+            @PathVariable Long workerId,
+            @RequestParam(required = false) Submission.Status status,
+            @RequestParam(required = false) Long campaignId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
-        return ResponseEntity.ok(ResponseDTO.ok(submissionService.getWorkerSubmissions(workerId)));
+        return ResponseEntity.ok(ResponseDTO.ok(submissionService.getWorkerSubmissions(workerId, status, campaignId, page, size)));
     }
 
     @GetMapping("/offer/{offerId}")

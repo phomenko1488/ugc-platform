@@ -5,10 +5,12 @@ import {
 } from 'lucide-react';
 import { api } from '../../../api';
 import DisputeModal from '../components/DisputeModal';
+import Pagination from '../../../components/Pagination';
 
 const STATUS_TABS = [
     { key: null, label: 'Все' },
-    { key: 'PENDING_REVIEW', label: 'На проверке' },
+    { key: 'PENDING_REVIEW', label: 'На проверке платформой' },
+    { key: 'TRACKING', label: 'В холде' },
     { key: 'APPROVED', label: 'Одобрено' },
     { key: 'DISPUTED', label: 'Оспорено' },
     { key: 'REJECTED', label: 'Отклонено' },
@@ -23,7 +25,24 @@ const STATUS_META = {
     PAID: { label: 'Выплачено', className: 'bg-brand-success/10 text-brand-success border-brand-success/20', icon: ThumbsUp },
 };
 
-const DISPUTABLE_STATUSES = new Set(['TRACKING', 'PENDING_REVIEW', 'APPROVED']);
+// Only a submission that has passed platform review and is sitting in its active hold (TRACKING)
+// can be disputed — PENDING_REVIEW hasn't been reviewed by the platform yet, and everything past
+// TRACKING (APPROVED/PAID) has already settled. Mirrors SubmissionServiceImpl.disputeSubmission's
+// server-side check exactly, so the button here never offers an action the backend would reject.
+const DISPUTABLE_STATUSES = new Set(['TRACKING']);
+
+// "Осталось на проверку: X дн. Y ч." next to a TRACKING submission — how much longer the
+// advertiser has to dispute it before HoldSettlementScheduler auto-settles it.
+function formatHoldRemaining(holdExpiresAt) {
+    if (!holdExpiresAt) return null;
+    const remainingMs = new Date(holdExpiresAt).getTime() - Date.now();
+    if (remainingMs <= 0) return 'Холд истёк, ожидает авторазморозки';
+
+    const totalHours = Math.floor(remainingMs / (60 * 60 * 1000));
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    return `Осталось на проверку: ${days} дн. ${hours} ч.`;
+}
 
 /**
  * Traffic Inspector — every submission across the advertiser's campaigns, filterable by status,
@@ -32,19 +51,36 @@ const DISPUTABLE_STATUSES = new Set(['TRACKING', 'PENDING_REVIEW', 'APPROVED']);
  */
 export default function AdvertiserTrafficPage({ advertiser, refreshKey }) {
     const [statusFilter, setStatusFilter] = useState(null);
-    const [submissions, setSubmissions] = useState(null);
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = useState(20);
+    const [pageData, setPageData] = useState(null);
     const [error, setError] = useState(null);
     const [zoomImageUrl, setZoomImageUrl] = useState(null);
     const [disputeTarget, setDisputeTarget] = useState(null);
+    // Ticks once a minute purely to force the "Осталось на проверку" labels below to recompute —
+    // no refetch, holdExpiresAt itself doesn't change between polls.
+    const [, setNowTick] = useState(0);
+
+    const submissions = pageData?.content || null;
+
+    useEffect(() => {
+        const interval = setInterval(() => setNowTick((n) => n + 1), 60_000);
+        return () => clearInterval(interval);
+    }, []);
 
     const load = () => {
         if (!advertiser?.id) return;
-        api.getAdvertiserTraffic(advertiser.id, statusFilter)
-            .then((data) => { setSubmissions(data || []); setError(null); })
+        api.getAdvertiserTraffic(advertiser.id, statusFilter, page, pageSize)
+            .then((data) => { setPageData(data); setError(null); })
             .catch((err) => setError(err.message || 'Не удалось загрузить трафик'));
     };
 
-    useEffect(load, [advertiser?.id, statusFilter, refreshKey]);
+    useEffect(load, [advertiser?.id, statusFilter, page, pageSize, refreshKey]);
+
+    const handleStatusFilterChange = (key) => {
+        setStatusFilter(key);
+        setPage(0);
+    };
 
     return (
         <div className="space-y-4">
@@ -56,7 +92,7 @@ export default function AdvertiserTrafficPage({ advertiser, refreshKey }) {
                     return (
                         <button
                             key={tab.label}
-                            onClick={() => setStatusFilter(tab.key)}
+                            onClick={() => handleStatusFilterChange(tab.key)}
                             className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                                 isActive
                                     ? 'bg-brand-accent text-brand-bg border-brand-accent'
@@ -154,6 +190,13 @@ export default function AdvertiserTrafficPage({ advertiser, refreshKey }) {
                                     </div>
                                 )}
 
+                                {s.status === 'TRACKING' && (
+                                    <div className="flex items-center gap-1.5 text-[11px] text-amber-400 font-mono bg-brand-warning/5 border border-brand-warning/20 rounded-lg px-3 py-1.5">
+                                        <Hourglass className="w-3 h-3 shrink-0" />
+                                        {formatHoldRemaining(s.holdExpiresAt)}
+                                    </div>
+                                )}
+
                                 {DISPUTABLE_STATUSES.has(s.status) && (
                                     <button
                                         onClick={() => setDisputeTarget(s)}
@@ -167,6 +210,17 @@ export default function AdvertiserTrafficPage({ advertiser, refreshKey }) {
                         );
                     })}
                 </div>
+            )}
+
+            {pageData && (
+                <Pagination
+                    currentPage={pageData.pageNumber}
+                    totalPages={pageData.totalPages}
+                    totalElements={pageData.totalElements}
+                    pageSize={pageSize}
+                    onPageChange={setPage}
+                    onPageSizeChange={(size) => { setPageSize(size); setPage(0); }}
+                />
             )}
 
             {zoomImageUrl && (

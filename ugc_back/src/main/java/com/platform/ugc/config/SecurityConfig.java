@@ -58,6 +58,13 @@ public class SecurityConfig {
                         // Dispute Flow: an advertiser flagging a submission from the Traffic Inspector.
                         .requestMatchers(HttpMethod.POST, "/api/v1/submissions/*/dispute").hasAnyAuthority("ROLE_ADVERTISER", "ROLE_ADMIN")
 
+                        // B2B Partner Cabinet (dashboard, referred-advertisers CRM, contract terms).
+                        .requestMatchers("/api/v1/partner/**").hasAnyAuthority("ROLE_PARTNER", "ROLE_ADMIN")
+
+                        // Admin Back-Office: full platform control (dashboard, users, payout desk,
+                        // platform/GEO reference data, settings) — ROLE_ADMIN only, no shared access.
+                        .requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
+
                         // Everything else just needs a valid, logged-in user of any role.
                         .anyRequest().authenticated()
                 )
@@ -69,11 +76,22 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Vite dev server. Add your production frontend origin here before deploying.
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+
+        // ВАЖНО: именно setAllowedOriginPatterns, а не setAllowedOrigins!
+        configuration.setAllowedOriginPatterns(List.of(
+                "http://localhost:*",
+                "http://127.0.0.1:*",
+                "https://*.trycloudflare.com",
+                "https://*.ngrok-free.app",
+                "https://*.loca.lt",
+                "https://*.ngrok.io"
+        ));
+
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of("Authorization", "Link", "X-Total-Count"));
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

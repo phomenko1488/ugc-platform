@@ -25,7 +25,11 @@ public class FinancialLedgerEntry {
         PLATFORM_NET_PROFIT,
         ADVERTISER_DEPOSIT,
         WORKER_WITHDRAWAL,
-        ADVERTISER_BUDGET_REFUND
+        ADVERTISER_BUDGET_REFUND,
+        // Admin Back-Office: a manual correction to a user's availableBalance (POST
+        // /api/v1/admin/users/{id}/balance-adjust). amount carries the signed delta applied
+        // (positive credit or negative debit), same convention WORKER_WITHDRAWAL already uses.
+        ADMIN_BALANCE_ADJUSTMENT
     }
 
     @Id
