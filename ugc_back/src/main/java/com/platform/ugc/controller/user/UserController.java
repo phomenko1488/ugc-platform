@@ -30,7 +30,7 @@ public class UserController {
     private final UserService userService;
     private final OneTimeTokenService oneTimeTokenService;
 
-    @Value("${app.telegram.bot-username:ugc_flow_bot}")
+    @Value("${telegram.bot.username:ugc_flow_bot}")
     private String telegramBotUsername;
 
     @Value("${app.telegram.tg-bind-ttl-minutes:15}")
@@ -117,5 +117,4 @@ public class UserController {
         userService.updateCustomB2BTerms(id, terms);
         return ResponseEntity.ok(ResponseDTO.ok("B2B условия обновлены", null));
     }
-    
 }

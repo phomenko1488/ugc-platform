@@ -6,7 +6,7 @@ import WorkerLayout from './modules/worker/WorkerLayout';
 import AdvertiserLayout from './modules/advertiser/AdvertiserLayout';
 import PartnerLayout from './modules/partner/PartnerLayout';
 import AdminLayout from './modules/admin/AdminLayout';
-import { api, authStorage, registerUnauthorizedHandler, decodeAccessTokenRoles, decodeAccessTokenUser } from './api';
+import {api, authStorage, registerUnauthorizedHandler, decodeAccessTokenRoles} from './api';
 import {Loader2, AlertTriangle, RefreshCw} from 'lucide-react';
 
 // @twa-dev/sdk degrades gracefully outside an actual Telegram client (initData is just empty),
@@ -90,66 +90,47 @@ export default function App() {
         try {
             setError(null);
 
-            let targetUser = null;
-            const currentUser = decodeAccessTokenUser();
-
-            // 1. Пробуем получить профиль через /users/me
+            // 1. Получаем профиль именно авторизованного пользователя через /users/me
+            let currentUser = null;
             try {
-                targetUser = await api.getMe();
-            } catch {
-                // 2. Если /users/me нет, запрашиваем юзера по ID из токена
-                if (currentUser?.userId) {
-                    try {
-                        targetUser = await api.getUserById(currentUser.userId);
-                    } catch {
-                        // игнорируем ошибку и пробуем поиск по списку
-                    }
-                }
+                currentUser = await api.getMe();
+            } catch (e) {
+                console.warn('Не удалось загрузить /users/me, пробуем фолбэк по токену', e);
             }
 
-            // 3. Фолбэк через общий список (если прямые эндпоинты недоступны)
-            if (!targetUser) {
+            // 2. Фолбэк, если эндпоинт /users/me недоступен
+            if (!currentUser) {
                 const allUsers = await api.getUsers();
                 setUsers(allUsers || []);
-
-                if (currentUser?.username) {
-                    targetUser = (allUsers || []).find(u =>
-                        u.username === currentUser.username ||
-                        u.email === currentUser.username ||
-                        String(u.telegramId) === String(currentUser.username)
-                    );
-                }
-
-                if (!targetUser && currentUser?.userId) {
-                    targetUser = (allUsers || []).find(u => u.id === Number(currentUser.userId));
-                }
-
-                // 4. Крайний фолбэк по роли (для dev-режима без токена)
-                if (!targetUser) {
-                    targetUser = (allUsers || []).find(u => {
-                        if (activeRole === 'WORKER') return u.roles?.includes('ROLE_WORKER');
-                        if (activeRole === 'ADVERTISER') return u.roles?.includes('ROLE_ADVERTISER');
-                        if (activeRole === 'MODERATOR') return u.roles?.includes('ROLE_MODERATOR');
-                        if (activeRole === 'PARTNER') return u.roles?.includes('ROLE_PARTNER');
-                        if (activeRole === 'ADMIN') return u.roles?.includes('ROLE_ADMIN');
-                        return false;
-                    });
-                }
-
-                if (!targetUser && allUsers?.length > 0) {
-                    targetUser = allUsers[0];
-                }
+                const tokenData = decodeAccessTokenRoles();
+                currentUser = (allUsers || []).find(u => {
+                    if (activeRole === 'WORKER') return u.roles?.includes('ROLE_WORKER');
+                    if (activeRole === 'ADVERTISER') return u.roles?.includes('ROLE_ADVERTISER');
+                    if (activeRole === 'MODERATOR') return u.roles?.includes('ROLE_MODERATOR');
+                    if (activeRole === 'PARTNER') return u.roles?.includes('ROLE_PARTNER');
+                    if (activeRole === 'ADMIN') return u.roles?.includes('ROLE_ADMIN');
+                    return false;
+                }) || allUsers[0];
             }
 
-            if (!targetUser) {
-                throw new Error('Не удалось загрузить профиль пользователя');
+            if (!currentUser) {
+                throw new Error("Не удалось определить активного пользователя");
             }
 
-            setActiveUser(targetUser);
+            setActiveUser(currentUser);
 
-            // Загружаем офферы с передачей ID реального воркера
-            const activeOffers = await api.getActiveOffers(targetUser.id);
+            // 3. Загружаем офферы под ID реального воркера
+            const activeOffers = await api.getActiveOffers(currentUser.id);
             setOffers(activeOffers?.content || activeOffers || []);
+
+            // 4. Синхронизируем роль из данных профиля
+            if (currentUser.roles && currentUser.roles.length > 0) {
+                if (currentUser.roles.includes('ROLE_ADMIN')) setActiveRole('ADMIN');
+                else if (currentUser.roles.includes('ROLE_WORKER')) setActiveRole('WORKER');
+                else if (currentUser.roles.includes('ROLE_ADVERTISER')) setActiveRole('ADVERTISER');
+                else if (currentUser.roles.includes('ROLE_MODERATOR')) setActiveRole('MODERATOR');
+                else if (currentUser.roles.includes('ROLE_PARTNER')) setActiveRole('PARTNER');
+            }
         } catch (err) {
             console.error('Ошибка загрузки данных:', err);
             setError(err.message || 'Ошибка подключения к серверу');

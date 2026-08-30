@@ -76,22 +76,22 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
-        // ВАЖНО: именно setAllowedOriginPatterns, а не setAllowedOrigins!
+        // Vite dev server, plus the public tunnel hosts (Cloudflare/ngrok/localtunnel) used to
+        // expose the dev frontend as the Telegram bot's WebApp URL for real on-device testing —
+        // setAllowedOriginPatterns (not setAllowedOrigins) is required for wildcard subdomains.
+        // Add your production frontend origin here before deploying.
         configuration.setAllowedOriginPatterns(List.of(
                 "http://localhost:*",
                 "http://127.0.0.1:*",
                 "https://*.trycloudflare.com",
                 "https://*.ngrok-free.app",
-                "https://*.loca.lt",
-                "https://*.ngrok.io"
+                "https://*.ngrok.io",
+                "https://*.loca.lt"
         ));
-
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("Authorization", "Link", "X-Total-Count"));
         configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

@@ -143,7 +143,9 @@ public class SubmissionServiceImpl implements SubmissionService {
 
         Submission saved = submissionRepository.save(submission);
 
-        telegramNotificationService.notifyAdvertiserNewSubmission(saved);
+        telegramNotificationService.notifyNewSubmission(offer.getAdvertiser(), offer.getTitle(), worker.getUsername());
+        telegramNotificationService.notifyNewSubmissionToReview(saved.getId(), offer.getTitle(),
+                platform.getDisplayName(), saved.getSourceUrl());
         notifyIfBudgetLow(offer);
 
         return saved;
@@ -158,7 +160,7 @@ public class SubmissionServiceImpl implements SubmissionService {
                 .multiply(BigDecimal.valueOf(100))
                 .divide(offer.getTotalBudget(), 4, RoundingMode.HALF_UP);
         if (remainingPercent.compareTo(LOW_BUDGET_THRESHOLD_PERCENT) < 0) {
-            telegramNotificationService.notifyAdvertiserLowBudget(offer);
+            telegramNotificationService.notifyLowBudget(offer.getAdvertiser(), offer.getTitle(), offer.getRemainingBudget());
             emailService.sendLowBudgetAlert(offer.getAdvertiser(), offer);
         }
     }
@@ -247,7 +249,9 @@ public class SubmissionServiceImpl implements SubmissionService {
         submission.setDisputeComment(comment);
         submission.setDisputedAt(Instant.now());
         submissionRepository.save(submission);
-        telegramNotificationService.notifyModeratorsNewDispute(submission);
+        // No separate Dispute entity exists in this data model — a dispute is just a Submission
+        // status, so the submission's own ID doubles as the "dispute ID" for notification purposes.
+        telegramNotificationService.notifyNewDisputeRaised(submissionId, submissionId, submission.getOffer().getTitle(), reason);
         log.info("Submission #{} disputed by advertiser {}. Reason: {}", submissionId, advertiserId, reason);
     }
 
@@ -266,6 +270,8 @@ public class SubmissionServiceImpl implements SubmissionService {
             return; // Идемпотентность
         }
 
+        Submission.Status previousStatus = submission.getStatus();
+
         User worker = userRepository.findByIdWithLock(submission.getWorker().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Воркер не найден"));
         Offer offer = offerRepository.findByIdWithLock(submission.getOffer().getId())
@@ -281,7 +287,29 @@ public class SubmissionServiceImpl implements SubmissionService {
         submission.setStatus(Submission.Status.REJECTED);
         submission.setModerationComment(rejectionReason);
         submissionRepository.save(submission);
+
+        telegramNotificationService.notifySubmissionRejected(worker, offer.getTitle(), rejectionReason);
+        // A DISPUTED submission being rejected means the advertiser's dispute was upheld — resolved
+        // in their favor (approved=false: the ролик stays rejected, no payout).
+        if (previousStatus == Submission.Status.DISPUTED) {
+            telegramNotificationService.notifyDisputeResolved(offer.getAdvertiser(), submissionId, false);
+        }
+        notifyIfWorkerShouldBeFlagged(worker);
+
         log.info("Submission #{} rejected. Hold ${} returned to offer budget.", submissionId, submission.getHoldAmount());
+    }
+
+    // A worker with a growing count of rejected submissions is worth a moderator/admin heads-up —
+    // deliberately simple (no persisted "already flagged" marker, may re-fire on every further
+    // rejection past the threshold), same accepted simplification as the advertiser low-budget alert.
+    private static final long FLAG_AFTER_REJECTED_COUNT = 3;
+
+    private void notifyIfWorkerShouldBeFlagged(User worker) {
+        long rejectedCount = submissionRepository.countByWorkerIdAndStatus(worker.getId(), Submission.Status.REJECTED);
+        if (rejectedCount >= FLAG_AFTER_REJECTED_COUNT) {
+            telegramNotificationService.notifyWorkerFlagged(worker,
+                    "Частые отклонения модерацией (" + rejectedCount + " отклоненных заявок)");
+        }
     }
 
     /**
@@ -310,7 +338,8 @@ public class SubmissionServiceImpl implements SubmissionService {
             submission.setHoldExpiresAt(Instant.now().plus(submission.getOffer().getHoldPeriodDays(), ChronoUnit.DAYS));
             submission.setModerationComment("Одобрено первичной модерацией. Переведено в холд");
             submissionRepository.save(submission);
-            telegramNotificationService.notifyWorkerModeratorApproved(submission);
+            telegramNotificationService.notifySubmissionApproved(
+                    submission.getWorker(), submission.getOffer().getTitle(), submission.getHoldAmount());
             log.info("Submission #{} passed platform review -> TRACKING, hold expires at {}",
                     submissionId, submission.getHoldExpiresAt());
             return;
@@ -323,6 +352,12 @@ public class SubmissionServiceImpl implements SubmissionService {
             // Финансовый расчет и перевод средств с холда на свободный баланс воркера
             settlementEngine.executeSettlement(submission);
             submissionRepository.save(submission);
+            // A DISPUTED submission being approved means the dispute was resolved in the worker's
+            // favor (approved=true) — the advertiser gets a heads-up either way.
+            if (previousStatus == Submission.Status.DISPUTED) {
+                telegramNotificationService.notifyDisputeResolved(
+                        submission.getOffer().getAdvertiser(), submissionId, true);
+            }
             log.info("Submission #{} approved ({} -> APPROVED). Payout settled to worker.",
                     submissionId, previousStatus);
             return;

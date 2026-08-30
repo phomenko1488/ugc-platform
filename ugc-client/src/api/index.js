@@ -6,7 +6,6 @@ const REFRESH_TOKEN_KEY = 'ugc_refresh_token';
 export const authStorage = {
     getAccessToken: () => localStorage.getItem(ACCESS_TOKEN_KEY),
     getRefreshToken: () => localStorage.getItem(REFRESH_TOKEN_KEY),
-    getMe: () => request('/users/me'),
     setTokens: (accessToken, refreshToken) => {
         localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
         if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
@@ -33,23 +32,7 @@ export function decodeAccessTokenRoles() {
         return [];
     }
 }
-export function decodeAccessTokenUser() {
-    const token = authStorage.getAccessToken();
-    if (!token) return null;
-    try {
-        const payload = token.split('.')[1];
-        const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-        const claims = JSON.parse(json);
-        // Spring Security в sub обычно кладет username или email
-        return {
-            username: claims.sub,
-            userId: claims.userId || claims.id,
-            roles: Array.isArray(claims.roles) ? claims.roles : []
-        };
-    } catch {
-        return null;
-    }
-}
+
 function authHeaders() {
     const token = authStorage.getAccessToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -309,6 +292,7 @@ export const api = {
     }),
     toggleGeo: (id) => request(`/admin/reference/geos/${id}/toggle`, { method: 'PUT' }),
     updatePlatformMargin: (margin) => request(`/admin/settings/margin?margin=${margin}`, { method: 'PUT' }),
+    getMe: () => request('/users/me'),
 };
 
 // Uses XHR instead of fetch so we can report real upload progress to the FileUploader component.

@@ -7,103 +7,78 @@ import com.platform.ugc.repository.user.UserRepository;
 import com.platform.ugc.service.auth.OneTimeTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 
 /**
- * Dispatches the three {@code /start} variants the bot supports — plain, {@code ref_TAG} (worker
- * onboarding with an affiliate referral), and {@code bind_TOKEN} (linking an existing
- * Advertiser/Partner web account to their Telegram chat). Kept independent of however updates
- * actually arrive (long-polling via {@link TelegramUpdatePoller} today, a webhook controller
- * tomorrow) — both would call straight into this class.
+ * Business logic behind the two non-trivial {@code /start} variants — {@link TelegramBotService}
+ * only parses the update and renders the reply; every read/write against {@code User}/
+ * {@code OneTimeToken} happens here so it stays independently testable and doesn't depend on
+ * however updates actually arrive (long-polling today, a webhook controller tomorrow).
+ * <p>
+ * Note on identifiers: for a private chat with the bot (the only kind this module deals with —
+ * there is no group-chat support), a Telegram user's own ID and the chat ID for messaging them
+ * are the same number. Both are accepted here as separate parameters to keep the method
+ * signatures self-documenting, but only one value ({@code chatId}) is actually persisted on
+ * {@link User#getTelegramId()}, since that's the only one ever used to send a message back.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TelegramCommandService {
 
-    private static final String WEBAPP_BUTTON_LABEL = "🚀 Открыть UGC Flow";
-
     private final UserRepository userRepository;
     private final OneTimeTokenService oneTimeTokenService;
-    private final TelegramBotClient botClient;
 
-    @Value("${app.frontend.base-url:http://localhost:5173}")
-    private String frontendBaseUrl;
-
-    // Transactional here, not on the private helpers below: they're only ever reached via
-    // self-invocation (handleStart calling this.handlePlainStart(...) etc.), which bypasses
-    // Spring's proxy-based transaction advice entirely — @Transactional on them would be a
-    // silent no-op. Putting it on this single externally-called entry point instead means the
-    // whole dispatch (including whichever helper runs) executes inside one real transaction.
+    /**
+     * {@code /start ref_<affiliateTag>} — finds-or-creates the worker behind this Telegram chat,
+     * attaching the referral (B2C affiliate program) on first contact only. Re-running it for an
+     * already-registered worker is a safe no-op lookup (no duplicate account, no re-attribution).
+     */
     @Transactional
-    public void handleStart(Long chatId, String username, String firstName, String payload) {
-        if (chatId == null) {
-            return;
-        }
-        if (payload == null || payload.isBlank()) {
-            handlePlainStart(chatId, username, firstName);
-        } else if (payload.startsWith("ref_")) {
-            handleRefStart(chatId, username, firstName, payload.substring("ref_".length()));
-        } else if (payload.startsWith("bind_")) {
-            handleBindStart(chatId, payload.substring("bind_".length()));
-        } else {
-            handlePlainStart(chatId, username, firstName);
-        }
+    public User processReferral(Long tgId, Long chatId, String username, String affiliateTag) {
+        return userRepository.findByTelegramId(chatId)
+                .orElseGet(() -> registerWorker(chatId, username, affiliateTag));
     }
 
-    /** Plain {@code /start} — greets whoever they are (auto-registering a worker on first contact) with the Mini App button. */
-    private void handlePlainStart(Long chatId, String username, String firstName) {
-        User worker = userRepository.findByTelegramId(chatId).orElseGet(() -> registerWorker(chatId, username, firstName, null));
-        botClient.sendMessageWithWebAppButton(chatId,
-                "Добро пожаловать в UGC Flow, " + displayName(worker, username, firstName) + "! 🎬\n\n" +
-                        "Здесь вы находите офферы от рекламодателей, снимаете ролики и получаете за это деньги.",
-                WEBAPP_BUTTON_LABEL, frontendBaseUrl);
-    }
-
-    /** {@code /start ref_TAG} — worker onboarding with a referral tag attached (B2C affiliate program). */
-    private void handleRefStart(Long chatId, String username, String firstName, String refTag) {
-        User worker = userRepository.findByTelegramId(chatId).orElseGet(() -> registerWorker(chatId, username, firstName, refTag));
-        String greeting = worker.getB2cReferrer() != null
-                ? "Добро пожаловать в UGC Flow, " + displayName(worker, username, firstName) + "! 🎬\n\n" +
-                  "Вы зарегистрированы по реферальной ссылке."
-                : "Добро пожаловать в UGC Flow, " + displayName(worker, username, firstName) + "! 🎬";
-        botClient.sendMessageWithWebAppButton(chatId, greeting, WEBAPP_BUTTON_LABEL, frontendBaseUrl);
-    }
-
-    /** {@code /start bind_TOKEN} — links this Telegram chat to an existing Advertiser/Partner account. */
-    private void handleBindStart(Long chatId, String token) {
-        var userOpt = oneTimeTokenService.consume(token, OneTimeToken.Purpose.TG_BIND);
+    /**
+     * {@code /start bind_<token>} — validates the one-time bind token, and on success attaches
+     * {@code chatId} to the token's owning web account (Advertiser/Moderator/Partner). Fails
+     * (empty result) if the token is missing/expired/already used, or if this Telegram chat is
+     * already bound to a different UGC Flow account.
+     */
+    @Transactional
+    public Optional<User> processBinding(Long tgId, Long chatId, String username, String token) {
+        Optional<User> userOpt = oneTimeTokenService.consume(token, OneTimeToken.Purpose.TG_BIND);
         if (userOpt.isEmpty()) {
-            botClient.sendMessage(chatId, "Ссылка привязки недействительна или уже устарела. Сгенерируйте новую в личном кабинете.");
-            return;
+            log.warn("Telegram bind attempt with invalid/expired token from chatId={}", chatId);
+            return Optional.empty();
         }
+
         User user = userOpt.get();
         if (userRepository.existsByTelegramId(chatId) && !chatId.equals(user.getTelegramId())) {
-            botClient.sendMessage(chatId, "Этот Telegram-аккаунт уже привязан к другому пользователю UGC Flow.");
-            return;
+            log.warn("Telegram chatId={} already bound to a different user; bind for user #{} rejected",
+                    chatId, user.getId());
+            return Optional.empty();
         }
+
         user.setTelegramId(chatId);
         userRepository.save(user);
-        botClient.sendMessageWithWebAppButton(chatId,
-                "Telegram успешно привязан к вашему аккаунту UGC Flow (" + user.getUsername() + "). " +
-                        "Теперь вы будете получать уведомления сюда.",
-                WEBAPP_BUTTON_LABEL, frontendBaseUrl);
+        log.info("Telegram chatId={} bound to user #{} ({})", chatId, user.getId(), user.getEmail());
+        return Optional.of(user);
     }
 
-    private User registerWorker(Long chatId, String username, String firstName, String refTag) {
-        String resolvedUsername = username != null && !username.isBlank()
-                ? username
-                : (firstName != null && !firstName.isBlank() ? firstName : "tg_" + chatId);
+    private User registerWorker(Long chatId, String username, String affiliateTag) {
+        String resolvedUsername = username != null && !username.isBlank() ? username : "tg_" + chatId;
 
         User referrer = null;
-        if (refTag != null && !refTag.isBlank()) {
-            referrer = userRepository.findByAffiliateTag(refTag.trim()).orElse(null);
+        if (affiliateTag != null && !affiliateTag.isBlank()) {
+            referrer = userRepository.findByAffiliateTag(affiliateTag.trim()).orElse(null);
             if (referrer != null && Boolean.TRUE.equals(referrer.getIsBanned())) {
                 referrer = null;
             }
@@ -122,14 +97,7 @@ public class TelegramCommandService {
                 .build();
 
         User saved = userRepository.save(worker);
-        log.info("Telegram bot registered new worker [ID: {}, tgId: {}, refTag: {}]", saved.getId(), chatId, refTag);
+        log.info("Telegram bot registered new worker [ID: {}, chatId: {}, refTag: {}]", saved.getId(), chatId, affiliateTag);
         return saved;
-    }
-
-    private String displayName(User user, String username, String firstName) {
-        if (user.getUsername() != null && !user.getUsername().isBlank()) {
-            return user.getUsername();
-        }
-        return username != null ? username : (firstName != null ? firstName : "друг");
     }
 }

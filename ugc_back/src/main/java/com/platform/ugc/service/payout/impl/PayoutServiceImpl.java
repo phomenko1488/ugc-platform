@@ -126,7 +126,7 @@ public class PayoutServiceImpl implements PayoutService {
                 .description("Выплата USDT TRC-20 — заявка #" + payout.getId())
                 .build());
 
-        telegramNotificationService.notifyPayoutCompleted(payout);
+        telegramNotificationService.notifyPayoutCompleted(payout.getUser(), payout.getAmount(), payout.getTxHash());
         emailService.sendPayoutCompletedEmail(payout.getUser(), payout);
 
         log.info("Выплата #{} подтверждена администратором, txHash={}", payoutId, txHash);

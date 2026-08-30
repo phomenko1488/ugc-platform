@@ -50,6 +50,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
+        <!-- Telegram Bot Engine (Module 6) — official client library, replacing the hand-rolled
+             HTTP-polling TelegramBotClient/TelegramUpdatePoller pair. -->
+        <dependency>
+            <groupId>org.telegram</groupId>
+            <artifactId>telegrambots-spring-boot-starter</artifactId>
+            <version>6.9.7.1</version>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -92,10 +99,7 @@
             <artifactId>jakarta.validation-api</artifactId>
             <version>3.1.1</version>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
-        </dependency>
+
         <!-- Jackson JSON Parser -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

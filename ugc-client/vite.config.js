@@ -5,8 +5,8 @@ export default defineConfig({
     plugins: [react()],
     server: {
         port: 5173,
-        host: true, // слушать на всех интерфейсах (0.0.0.0)
-        allowedHosts: true, // разрешить подключение с любых туннельных доменов
+        host: true, // listen on all interfaces (0.0.0.0) — required for a tunnel to reach this dev server
+        allowedHosts: true, // accept the Host header a tunnel domain sends (Cloudflare/ngrok/localtunnel)
         proxy: {
             '/api': {
                 target: 'http://localhost:80',

@@ -63,7 +63,7 @@ public class FinancialSettlementEngine {
         }
         userRepository.save(worker);
         recordLedger(worker, submission, FinancialLedgerEntry.EntryType.WORKER_PAYOUT, workerPayout, "Выплата за видео #" + submission.getExternalVideoId());
-        telegramNotificationService.notifyWorkerHoldReleased(submission);
+        telegramNotificationService.notifyHoldSettled(worker, workerPayout);
 
         // 2. Начисление B2C рефереру
         if (worker.getB2cReferrer() != null && b2cCommission.compareTo(BigDecimal.ZERO) > 0) {
@@ -81,7 +81,7 @@ public class FinancialSettlementEngine {
             partner.setAvailableBalance(partner.getAvailableBalance().add(b2bCommission));
             userRepository.save(partner);
             recordLedger(partner, submission, FinancialLedgerEntry.EntryType.B2B_PARTNER_COMMISSION, b2bCommission, "B2B Комиссия за рекламодателя");
-            telegramNotificationService.notifyPartnerRevShare(partner, b2bCommission, advertiser);
+            telegramNotificationService.notifyPartnerCommission(partner, b2bCommission, advertiser.getUsername());
         }
 
         log.info("Клиринг заявки [ID: {}] завершен. Gross: ${}, Worker: ${}, Margin: ${}",

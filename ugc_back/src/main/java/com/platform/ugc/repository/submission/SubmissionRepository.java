@@ -35,6 +35,9 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
     // Метод для выборки обычной проверки + активных споров
     List<Submission> findAllByStatusInOrderByCreatedAtAsc(Collection<Submission.Status> statuses);
 
+    // TelegramQueueBacklogScheduler's periodic check — count only, no need to load the rows.
+    long countByStatusIn(Collection<Submission.Status> statuses);
+
     // Pagination initiative — Moderator queue (GET /moderation/queue), single-status tab. No
     // OrderBy suffix: the caller's Pageable carries the sort (createdAt asc, FIFO).
     Page<Submission> findAllByStatus(Submission.Status status, Pageable pageable);
