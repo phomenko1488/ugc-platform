@@ -9,6 +9,7 @@ import ModeratorLayout from "./modules/moderator/ModeratorLayout.jsx";
 import {api, authStorage, registerUnauthorizedHandler, decodeAccessTokenRoles} from './api';
 import {Loader2, AlertTriangle, RefreshCw} from 'lucide-react';
 import WebApp from '@twa-dev/sdk';
+import LandingPage from './modules/landing/LandingPage';
 
 export default function App() {
     const [authStatus, setAuthStatus] = useState('checking');
@@ -102,6 +103,11 @@ export default function App() {
     useEffect(() => {
         if (authStatus === 'authenticated') {
             loadData();
+        }
+        if (authStatus === 'anonymous') {
+            return (
+                <LandingPage botUsername="ugc_flow_bot" />
+            );
         }
     }, [authStatus]);
 
