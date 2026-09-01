@@ -130,6 +130,11 @@ export const api = {
     // --- Media (Module 4) ---
     uploadMedia: (file, onProgress) => uploadMediaWithProgress(file, onProgress),
 
+    // The authenticated caller's OWN profile, resolved server-side from the JWT — see
+    // App.jsx's loadData() for why this replaced the old getUsers()-based guess.
+    getCurrentUser: () => request('/users/me'),
+    // ROLE_ADMIN only on the backend now (see SecurityConfig) — dumps every user's
+    // email/balances/wallet, so it's no longer called from the ordinary login bootstrap.
     getUsers: () => request('/users'),
     getUserById: (id) => request(`/users/${id}`),
     updateWallet: (id, wallet) => request(`/users/${id}/wallet?walletAddress=${encodeURIComponent(wallet)}`, { method: 'PUT' }),

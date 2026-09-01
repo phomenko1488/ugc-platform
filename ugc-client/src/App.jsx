@@ -134,7 +134,11 @@ export default function App() {
     const [authError, setAuthError] = useState(null);
 
     const [activeRole, setActiveRole] = useState('WORKER');
-    const [users, setUsers] = useState([]);
+    // Vestigial: used to hold the full user directory for the old getUsers()-based identity
+    // guess (see loadData() below). Kept only because <Header> still accepts a `users` prop
+    // (unused inside it) on the /dev-role-switch fallback screen — safe to delete entirely
+    // along with that prop whenever that screen is cleaned up.
+    const [users] = useState([]);
     const [activeUser, setActiveUser] = useState(null);
 
     const [offers, setOffers] = useState([]);
@@ -200,25 +204,21 @@ export default function App() {
         bootstrap();
     }, [handleUnauthenticated]);
 
+    // SECURITY/CORRECTNESS FIX (audit finding): this used to call api.getUsers() — the full user
+    // directory — and pick "activeUser" by scanning it for the first row whose roles happened to
+    // match activeRole, falling back to allUsers[0] if nothing matched. That meant activeUser.id
+    // was essentially arbitrary: in any environment with more than one user per role, EVERY
+    // advertiser (say) would resolve to the SAME "first advertiser in the table" account —
+    // dashboards, wallets and payout requests would all act on a stranger's id, not the actual
+    // logged-in user's. It also depended on GET /users, which the backend now correctly restricts
+    // to ROLE_ADMIN (it dumps every user's email/balances/wallet). The fix: ask the backend who
+    // the JWT actually belongs to (GET /users/me, resolved server-side from the token) instead of
+    // guessing from a list.
     const loadData = async () => {
         try {
             setError(null);
-            const allUsers = await api.getUsers();
-            setUsers(allUsers || []);
-
-            let targetUser = (allUsers || []).find((u) => {
-                if (activeRole === 'WORKER') return u.roles?.includes('ROLE_WORKER');
-                if (activeRole === 'ADVERTISER') return u.roles?.includes('ROLE_ADVERTISER');
-                if (activeRole === 'MODERATOR') return u.roles?.includes('ROLE_MODERATOR');
-                if (activeRole === 'PARTNER') return u.roles?.includes('ROLE_PARTNER');
-                if (activeRole === 'ADMIN') return u.roles?.includes('ROLE_ADMIN');
-                return false;
-            });
-
-            if (!targetUser && allUsers?.length > 0) {
-                targetUser = allUsers[0];
-            }
-            setActiveUser(targetUser || null);
+            const me = await api.getCurrentUser();
+            setActiveUser(me || null);
 
             const activeOffers = await api.getActiveOffers();
             setOffers(activeOffers || []);
@@ -295,16 +295,13 @@ export default function App() {
                     authStatus === 'authenticated' ? (
                         <Navigate to={ROLE_HOME[activeRole] || '/'} replace />
                     ) : (
-                        <>
-                            <LandingPage onLoginClick={() => {}} />
-                            <LoginModal
-                                onBack={() => navigate('/')}
-                                onAuthenticated={() => {
-                                    applyRoleFromToken();
-                                    setAuthStatus('authenticated');
-                                }}
-                            />
-                        </>
+                        <LoginModal
+                            onBack={() => navigate('/')}
+                            onAuthenticated={() => {
+                                applyRoleFromToken();
+                                setAuthStatus('authenticated');
+                            }}
+                        />
                     )
                 }
             />

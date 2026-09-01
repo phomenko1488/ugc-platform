@@ -5,6 +5,7 @@ import com.platform.ugc.dto.advertiser.AdvertiserDashboardDTO;
 import com.platform.ugc.dto.advertiser.AdvertiserDeepAnalyticsDTO;
 import com.platform.ugc.dto.advertiser.CampaignPerformanceDTO;
 import com.platform.ugc.dto.common.PageResponseDTO;
+import com.platform.ugc.security.CurrentUserUtil;
 import com.platform.ugc.service.advertiser.AdvertiserAnalyticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -26,6 +27,7 @@ public class AdvertiserDashboardController {
 
     @GetMapping("/dashboard")
     public ResponseEntity<ResponseDTO<AdvertiserDashboardDTO>> getDashboard(@PathVariable Long advertiserId) {
+        CurrentUserUtil.assertSelfOrAdmin(advertiserId);
         return ResponseEntity.ok(ResponseDTO.ok(advertiserAnalyticsService.getDashboard(advertiserId)));
     }
 
@@ -39,6 +41,7 @@ public class AdvertiserDashboardController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(advertiserId);
         return ResponseEntity.ok(ResponseDTO.ok(advertiserAnalyticsService.getDeepAnalytics(advertiserId, from, to)));
     }
 
@@ -55,6 +58,7 @@ public class AdvertiserDashboardController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(advertiserId);
         return ResponseEntity.ok(ResponseDTO.ok(advertiserAnalyticsService.getCampaignComparison(advertiserId, from, to, page, size)));
     }
 }

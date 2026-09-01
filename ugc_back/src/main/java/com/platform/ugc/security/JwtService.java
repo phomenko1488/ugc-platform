@@ -40,12 +40,34 @@ public class JwtService {
     private final long accessTokenTtlMinutes;
     private final long refreshTokenTtlDays;
 
+    // Base64 of "dev-only-ugc-flow-jwt-secret-do-not-use-in-prod-please-rotate-me" — the literal
+    // default baked into application-dev.properties's ${JWT_SECRET:...} fallback. Public the
+    // moment this repository is, so a deployment that forgets to set the JWT_SECRET env var would
+    // silently sign every token — including admin tokens — with a secret anyone can read on
+    // GitHub. See the constructor below for the fail-fast guard this enables.
+    private static final String KNOWN_DEV_DEFAULT_SECRET_B64 =
+            "ZGV2LW9ubHktdWdjLWZsb3ctand0LXNlY3JldC1kby1ub3QtdXNlLWluLXByb2QtcGxlYXNlLXJvdGF0ZS1tZQ==";
+
     public JwtService(
             @Value("${app.jwt.secret}") String secret,
             @Value("${app.jwt.issuer:ugc-flow}") String issuer,
             @Value("${app.jwt.access-token-ttl-minutes:1440}") long accessTokenTtlMinutes,
-            @Value("${app.jwt.refresh-token-ttl-days:30}") long refreshTokenTtlDays
+            @Value("${app.jwt.refresh-token-ttl-days:30}") long refreshTokenTtlDays,
+            @Value("${spring.profiles.active:}") String activeProfiles
     ) {
+        // Refuse to start rather than silently sign every token (including admin ones) with a
+        // secret that's sitting in plain text in this repo's application-dev.properties. This is
+        // a fail-fast net for whenever a real "prod"/"production" profile is introduced — it
+        // does nothing today since spring.profiles.active is hardcoded to "dev" in
+        // application.properties, which is itself a separate finding (see the audit report).
+        boolean looksLikeProd = activeProfiles != null
+                && (activeProfiles.toLowerCase(java.util.Locale.ROOT).contains("prod"));
+        if (looksLikeProd && KNOWN_DEV_DEFAULT_SECRET_B64.equals(secret)) {
+            throw new IllegalStateException(
+                    "app.jwt.secret is still the publicly-known dev default while running with a "
+                            + "'prod' profile. Set the JWT_SECRET environment variable to a real, "
+                            + "randomly-generated secret before starting in production.");
+        }
         this.signingKey = resolveSigningKey(secret);
         this.issuer = issuer;
         this.accessTokenTtlMinutes = accessTokenTtlMinutes;

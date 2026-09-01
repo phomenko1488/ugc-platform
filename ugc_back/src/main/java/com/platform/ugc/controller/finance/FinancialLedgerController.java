@@ -3,6 +3,7 @@ package com.platform.ugc.controller.finance;
 import com.platform.ugc.dto.common.ApiEnvelope;
 import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.finance.FinancialLedgerResponseDTO;
+import com.platform.ugc.security.CurrentUserUtil;
 import com.platform.ugc.service.finance.FinancialLedgerQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ public class FinancialLedgerController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(userId);
         return ResponseEntity.ok(ApiEnvelope.ok(ledgerQueryService.getLedgerForUser(userId, page, size)));
     }
 }

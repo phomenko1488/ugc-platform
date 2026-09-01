@@ -53,6 +53,32 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/v1/offers/*/status").hasAnyAuthority("ROLE_ADVERTISER", "ROLE_ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/v1/offers/*/topup").hasAnyAuthority("ROLE_ADVERTISER", "ROLE_ADMIN")
 
+                        // Worker Workbench (WorkerOfferController) — audit found this whole
+                        // sub-path had NO rule beyond the generic "any authenticated role"
+                        // fallback below, so an Advertiser/Partner/Moderator/Admin JWT could take
+                        // offers, browse the catalog, or read submission history "as" a worker.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/offers/*/take").hasAnyAuthority("ROLE_WORKER", "ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/offers/*/leave").hasAnyAuthority("ROLE_WORKER", "ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/offers/my").hasAnyAuthority("ROLE_WORKER", "ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/offers/catalog").hasAnyAuthority("ROLE_WORKER", "ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/offers/*/details").hasAnyAuthority("ROLE_WORKER", "ROLE_ADMIN")
+
+                        // User Directory (UserController) — audit found /users (dumps every
+                        // user's email/balances/wallet), POST /users/register (unlike
+                        // /auth/register, this one places NO restriction on targetRole — any
+                        // authenticated caller could mint themselves a ROLE_ADMIN account), and
+                        // the ban/role/terms endpoints all fell through to "any authenticated
+                        // role" with no ownership check either. All five are back-office/admin
+                        // operations — restrict to ROLE_ADMIN. (/users/me, /users/{id},
+                        // /{id}/wallet, /{id}/tg-bind-token, /{id}/referrals stay reachable by any
+                        // authenticated user — CurrentUserUtil.assertSelfOrAdmin in
+                        // UserController enforces the ownership check for those.)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users").hasAuthority("ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/users/register").hasAuthority("ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/users/*/ban").hasAuthority("ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/users/*/role").hasAuthority("ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/users/*/terms/**").hasAuthority("ROLE_ADMIN")
+
                         // Advertiser Cabinet (dashboard, campaign detail, traffic inspector, billing).
                         .requestMatchers("/api/v1/advertiser/**").hasAnyAuthority("ROLE_ADVERTISER", "ROLE_ADMIN")
                         // Dispute Flow: an advertiser flagging a submission from the Traffic Inspector.

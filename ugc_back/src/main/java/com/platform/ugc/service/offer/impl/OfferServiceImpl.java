@@ -12,6 +12,7 @@ import com.platform.ugc.repository.offer.GeoCountryRepository;
 import com.platform.ugc.repository.offer.OfferRepository;
 import com.platform.ugc.repository.offer.PlatformRepository;
 import com.platform.ugc.repository.user.UserRepository;
+import com.platform.ugc.security.CurrentUserUtil;
 import com.platform.ugc.service.offer.OfferService;
 import com.platform.ugc.service.setting.PlatformSettingsService;
 import lombok.RequiredArgsConstructor;
@@ -132,6 +133,11 @@ public class OfferServiceImpl implements OfferService {
     @Override
     @Transactional
     public void setOfferActiveStatus(Long offerId, Long advertiserId, boolean isActive) {
+        // This only ever proved "advertiserId owns this offer" — it never proved "the caller IS
+        // advertiserId". Since advertiserId comes straight from a client-supplied @RequestParam,
+        // any advertiser could pass ANOTHER advertiser's id + offerId and this check would pass
+        // trivially. CurrentUserUtil closes the identity half.
+        CurrentUserUtil.assertSelfOrAdmin(advertiserId);
         Offer offer = getById(offerId);
         if (!offer.getAdvertiser().getId().equals(advertiserId)) {
             throw new AccessDeniedException("Нет доступа к офферу.");
@@ -143,6 +149,9 @@ public class OfferServiceImpl implements OfferService {
     @Override
     @Transactional
     public void topUpOfferBudget(Long offerId, Long advertiserId, BigDecimal additionalBudget) {
+        // See setOfferActiveStatus above — same "checked the wrong thing" bug, but here it also
+        // gated a financial mutation (debiting advertiserId's balance), not just a status flip.
+        CurrentUserUtil.assertSelfOrAdmin(advertiserId);
         if (additionalBudget.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Сумма пополнения должна быть больше 0.");
         }

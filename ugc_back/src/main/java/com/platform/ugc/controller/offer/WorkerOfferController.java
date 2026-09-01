@@ -4,6 +4,7 @@ import com.platform.ugc.dto.common.ApiEnvelope;
 import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.offer.WorkerOfferDetailsDTO;
 import com.platform.ugc.dto.offer.WorkerOfferSummaryDTO;
+import com.platform.ugc.security.CurrentUserUtil;
 import com.platform.ugc.service.offer.WorkerOfferException;
 import com.platform.ugc.service.offer.WorkerOfferService;
 import lombok.RequiredArgsConstructor;
@@ -28,10 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
  * already handled by the real, unread OfferController, and Spring refuses to start with two
  * handlers mapped to the same route.
  * <p>
- * Auth: takes {@code workerId} as a request param for now, matching how the rest of this
- * (pre-Module-1) codebase's endpoints already pass ids explicitly rather than reading
- * {@code @AuthenticationPrincipal} — see INTEGRATION_GUIDE.md if you'd rather derive it from the
- * JWT instead once the wider codebase does the same everywhere.
+ * Auth: takes {@code workerId} as a request param, matching how the rest of this codebase passes
+ * ids explicitly. A security audit found this base path ({@code /api/v1/offers/**}) had NO
+ * SecurityConfig rule of its own beyond the catch-all "any authenticated role" (see the new
+ * matchers added in SecurityConfig restricting these five paths to ROLE_WORKER/ROLE_ADMIN), and
+ * that {@code workerId} was never checked against the caller — any authenticated user of ANY role
+ * could take/leave offers or read offer details/history on behalf of an arbitrary worker.
+ * {@link CurrentUserUtil#assertSelfOrAdmin} below closes the identity half of that gap.
  */
 @Slf4j
 @RestController
@@ -46,6 +50,7 @@ public class WorkerOfferController {
             @PathVariable Long offerId,
             @RequestParam Long workerId
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(workerId);
         try {
             workerOfferService.takeOffer(workerId, offerId);
             return ResponseEntity.ok(ApiEnvelope.<Void>ok(null));
@@ -59,6 +64,7 @@ public class WorkerOfferController {
             @PathVariable Long offerId,
             @RequestParam Long workerId
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(workerId);
         try {
             workerOfferService.leaveOffer(workerId, offerId);
             return ResponseEntity.ok(ApiEnvelope.<Void>ok(null));
@@ -73,6 +79,7 @@ public class WorkerOfferController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(workerId);
         return ResponseEntity.ok(ApiEnvelope.ok(workerOfferService.getMyOffers(workerId, page, size)));
     }
 
@@ -84,6 +91,7 @@ public class WorkerOfferController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(workerId);
         return ResponseEntity.ok(ApiEnvelope.ok(workerOfferService.getAllOffersForWorker(workerId, search, platform, page, size)));
     }
 
@@ -92,6 +100,7 @@ public class WorkerOfferController {
             @PathVariable Long offerId,
             @RequestParam Long workerId
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(workerId);
         try {
             return ResponseEntity.ok(ApiEnvelope.ok(workerOfferService.getOfferDetails(workerId, offerId)));
         } catch (WorkerOfferException e) {

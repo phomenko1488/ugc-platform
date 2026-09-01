@@ -13,6 +13,7 @@ import com.platform.ugc.repository.offer.OfferRepository;
 import com.platform.ugc.repository.offer.PlatformRepository;
 import com.platform.ugc.repository.submission.SubmissionRepository;
 import com.platform.ugc.repository.user.UserRepository;
+import com.platform.ugc.security.CurrentUserUtil;
 import com.platform.ugc.email.EmailService;
 import com.platform.ugc.service.finance.FinancialSettlementEngine;
 import com.platform.ugc.service.submission.SubmissionService;
@@ -172,16 +173,31 @@ public class SubmissionServiceImpl implements SubmissionService {
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена: " + id));
     }
 
+    /**
+     * Was reachable by ANY authenticated user for ANY submission id — no ownership check
+     * existed at all. Now allows the submission's own worker, the owning offer's advertiser
+     * (both get the masked handle, matching the Traffic Inspector), or ROLE_MODERATOR/ROLE_ADMIN
+     * (unmasked, for moderation).
+     */
     @Override
     @Transactional(readOnly = true)
     public SubmissionResponseDTO getSubmissionDetails(Long id) {
-        return SubmissionResponseDTO.fromEntity(getById(id));
+        Submission submission = getById(id);
+        Long callerId = CurrentUserUtil.principal() != null ? CurrentUserUtil.principal().getId() : null;
+        boolean isStaff = CurrentUserUtil.hasAuthority("ROLE_ADMIN") || CurrentUserUtil.hasAuthority("ROLE_MODERATOR");
+        boolean isOwningWorker = callerId != null && callerId.equals(submission.getWorker().getId());
+        boolean isOwningAdvertiser = callerId != null && callerId.equals(submission.getOffer().getAdvertiser().getId());
+        if (!isStaff && !isOwningWorker && !isOwningAdvertiser) {
+            throw new AccessDeniedException("Нет доступа к этой заявке.");
+        }
+        return SubmissionResponseDTO.fromEntity(submission, isOwningAdvertiser && !isStaff);
     }
 
     @Override
     @Transactional(readOnly = true)
     public PageResponseDTO<SubmissionResponseDTO> getWorkerSubmissions(Long workerId, Submission.Status status,
                                                                         Long campaignId, int page, int size) {
+        CurrentUserUtil.assertSelfOrAdmin(workerId);
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200),
                 Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Submission> submissions = submissionRepository.findAllByWorkerId(workerId, status, campaignId, pageable);
@@ -191,6 +207,9 @@ public class SubmissionServiceImpl implements SubmissionService {
     @Override
     @Transactional(readOnly = true)
     public List<SubmissionResponseDTO> getOfferSubmissions(Long offerId, Long advertiserId) {
+        // advertiserId used to only be checked against the offer's owner, never against the
+        // caller — see the ownership-check writeup in OfferServiceImpl for the same bug pattern.
+        CurrentUserUtil.assertSelfOrAdmin(advertiserId);
         Offer offer = offerRepository.findById(offerId)
                 .orElseThrow(() -> new IllegalArgumentException("Оффер не найден: " + offerId));
 
@@ -199,7 +218,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         }
 
         return submissionRepository.findAllByOfferIdOrderByCreatedAtDesc(offerId).stream()
-                .map(SubmissionResponseDTO::fromEntity)
+                .map(s -> SubmissionResponseDTO.fromEntity(s, true))
                 .toList();
     }
 
@@ -218,6 +237,9 @@ public class SubmissionServiceImpl implements SubmissionService {
     @Override
     @Transactional
     public void disputeSubmission(Long submissionId, Long advertiserId, String reason, String comment) {
+        // Same "checked the wrong thing" IDOR as OfferServiceImpl/getOfferSubmissions above:
+        // advertiserId is a client-supplied @RequestParam and was never compared to the caller.
+        CurrentUserUtil.assertSelfOrAdmin(advertiserId);
         Submission submission = submissionRepository.findByIdWithLock(submissionId)
                 .orElseThrow(() -> new IllegalArgumentException("Сабмит не найден: " + submissionId));
 
@@ -366,13 +388,20 @@ public class SubmissionServiceImpl implements SubmissionService {
         throw new IllegalStateException("Недопустимый статус для одобрения: " + submission.getStatus());
     }
 
+    /**
+     * Traffic Inspector feed. Also enforces ownership itself (defense in depth — the controller
+     * already checks this too), and masks {@code authorChannelName} SERVER-SIDE: previously the
+     * raw handle was sent to the browser and only masked in the React render, so it was fully
+     * visible via the Network tab or a direct API call with a valid advertiser token.
+     */
     @Override
     @Transactional(readOnly = true)
     public PageResponseDTO<SubmissionResponseDTO> getAdvertiserTraffic(Long advertiserId, Submission.Status statusFilter,
                                                                         int page, int size) {
+        CurrentUserUtil.assertSelfOrAdmin(advertiserId);
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200),
                 Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Submission> submissions = submissionRepository.findAllByOfferAdvertiserId(advertiserId, statusFilter, pageable);
-        return PageResponseDTO.of(submissions.map(SubmissionResponseDTO::fromEntity));
+        return PageResponseDTO.of(submissions.map(s -> SubmissionResponseDTO.fromEntity(s, true)));
     }
 }

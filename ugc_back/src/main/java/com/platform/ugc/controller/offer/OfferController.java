@@ -5,6 +5,7 @@ import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.offer.OfferCreateRequestDTO;
 import com.platform.ugc.dto.offer.OfferResponseDTO;
 import com.platform.ugc.model.offer.Offer;
+import com.platform.ugc.security.CurrentUserUtil;
 import com.platform.ugc.service.offer.OfferService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ public class OfferController {
             @RequestParam Long advertiserId,
             @Valid @RequestBody OfferCreateRequestDTO request
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(advertiserId);
         Offer offer = offerService.createOffer(advertiserId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ResponseDTO.ok("Оффер успешно создан", OfferResponseDTO.fromEntity(offer)));
@@ -43,6 +45,7 @@ public class OfferController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(advertiserId);
         return ResponseEntity.ok(ResponseDTO.ok(offerService.getOffersByAdvertiser(advertiserId, page, size)));
     }
 

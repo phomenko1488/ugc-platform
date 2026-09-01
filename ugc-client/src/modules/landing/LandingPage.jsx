@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {motion, useReducedMotion} from 'framer-motion';
 import {
     Workflow,
     ArrowRight,
@@ -38,6 +39,7 @@ import {
     HelpCircle,
     ChevronDown,
 } from 'lucide-react';
+import HeroTrafficConverter from './HeroTrafficConverter';
 
 const TELEGRAM_BASE_URL = 'https://t.me/';
 const BRAND_NAME = 'Selika';
@@ -291,7 +293,6 @@ const LIVE_STREAM_EVENTS = [
     },
 ];
 
-// Лента набранных просмотров и заработанных денег для бегущей строки
 const METRICS_TAPE_ROWS = [
     {views: '+1.4M просмотров', amount: 350.00, geo: 'LATAM', status: 'SETTLED'},
     {views: '+850K просмотров', amount: 212.50, geo: 'T1', status: 'SETTLED'},
@@ -340,7 +341,27 @@ function MetricsTape({dense = false}) {
     );
 }
 
+const HERO_CONTAINER_VARIANTS = {
+    hidden: {},
+    show: {transition: {staggerChildren: 0.1, delayChildren: 0.05}},
+};
+
+function heroItemVariants(prefersReducedMotion) {
+    return {
+        hidden: {opacity: 0, y: prefersReducedMotion ? 0 : 22},
+        show: {
+            opacity: 1,
+            y: 0,
+            transition: prefersReducedMotion
+                ? {duration: 0.4}
+                : {type: 'spring', stiffness: 300, damping: 30, mass: 0.9},
+        },
+    };
+}
+
 export default function LandingPage({botUsername = 'selika_bot', onLoginClick}) {
+    const prefersReducedMotion = useReducedMotion();
+    const heroItem = useMemo(() => heroItemVariants(prefersReducedMotion), [prefersReducedMotion]);
     const [activeRole, setActiveRole] = useState('worker');
     const [viewsMillions, setViewsMillions] = useState(10);
     const [cpmBase, setCpmBase] = useState(250);
@@ -532,41 +553,76 @@ export default function LandingPage({botUsername = 'selika_bot', onLoginClick}) 
                     <div
                         className="absolute top-0 right-0 -z-10 h-96 w-96 rounded-full bg-brand-accent/5 blur-3xl pointer-events-none"/>
                     <div className="px-6 pb-16 pt-20 sm:px-12 sm:pt-24 lg:px-16">
-                        <div className="max-w-3xl">
-                            <SectionLabel>Инфраструктура автоматизации видео-трафика</SectionLabel>
-                            <h1 className="mt-6 font-display text-[12vw] uppercase leading-[0.92] tracking-tight text-[#f1eee6] sm:text-6xl lg:text-7xl">
-                                Ролики в топ.
-                                <br/>
-                                <span className="text-brand-accent">Выплаты в USDT.</span>
-                            </h1>
-                            <p className="mt-7 max-w-xl text-base leading-relaxed text-ash sm:text-lg">
-                                {BRAND_NAME} объединяет сети видео-криэйторов, автоматический учет просмотров из TikTok,
-                                Reels и Shorts и мгновенные крипто-расчеты.
-                            </p>
-
-                            <div className="mt-10 flex flex-col gap-3.5 sm:flex-row">
-                                <a
-                                    href={botUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="group flex items-center justify-center gap-2 rounded-lg bg-brand-accent px-7 py-4 text-sm font-semibold text-brand-bg shadow-xl shadow-brand-accent/20 transition-all hover:bg-brand-accentHover"
+                        <motion.div
+                            variants={HERO_CONTAINER_VARIANTS}
+                            initial="hidden"
+                            animate="show"
+                            className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-10"
+                        >
+                            <div className="max-w-3xl">
+                                <motion.div variants={heroItem}>
+                                    <SectionLabel>Инфраструктура автоматизации видео-трафика</SectionLabel>
+                                </motion.div>
+                                <motion.h1
+                                    variants={heroItem}
+                                    className="mt-6 font-display text-[12vw] uppercase leading-[0.92] tracking-tight text-[#f1eee6] sm:text-6xl lg:text-7xl"
                                 >
-                                    <Send className="h-4 w-4"/>
-                                    Запустить через Telegram
-                                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1"/>
-                                </a>
-                                {onLoginClick && (
-                                    <button
-                                        type="button"
-                                        onClick={onLoginClick}
-                                        className="flex items-center justify-center gap-2 rounded-lg border border-brand-border bg-brand-card/60 px-7 py-4 text-sm font-semibold text-[#f1eee6] backdrop-blur transition-all hover:border-brand-accent/50 hover:bg-brand-card"
+                                    Ролики в топ.
+                                    <br/>
+                                    <span className="text-brand-accent">Выплаты в USDT.</span>
+                                </motion.h1>
+                                <motion.p
+                                    variants={heroItem}
+                                    className="mt-7 max-w-xl text-base leading-relaxed text-ash sm:text-lg"
+                                >
+                                    {BRAND_NAME} объединяет сети видео-криэйторов, автоматический учет просмотров из
+                                    TikTok, Reels и Shorts и мгновенные крипто-расчеты.
+                                </motion.p>
+
+                                <motion.div variants={heroItem} className="mt-10 flex flex-col gap-3.5 sm:flex-row">
+                                    <motion.a
+                                        href={botUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        whileHover={prefersReducedMotion ? undefined : {
+                                            scale: 1.02,
+                                            transition: {type: 'spring', stiffness: 400, damping: 22},
+                                        }}
+                                        whileTap={prefersReducedMotion ? undefined : {
+                                            scale: 0.98,
+                                            transition: {type: 'spring', stiffness: 500, damping: 30},
+                                        }}
+                                        transition={{type: 'spring', stiffness: 300, damping: 25}}
+                                        className="group flex items-center justify-center gap-2 rounded-lg bg-brand-accent px-7 py-4 text-sm font-semibold text-brand-bg shadow-xl shadow-brand-accent/20 transition-colors hover:bg-brand-accentHover"
                                     >
-                                        <LogIn className="h-4 w-4 text-brand-accent"/>
-                                        Войти в систему
-                                    </button>
-                                )}
+                                        <Send className="h-4 w-4"/>
+                                        Запустить через Telegram
+                                        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1"/>
+                                    </motion.a>
+                                    {onLoginClick && (
+                                        <motion.button
+                                            type="button"
+                                            onClick={onLoginClick}
+                                            whileHover={prefersReducedMotion ? undefined : {
+                                                scale: 1.02,
+                                                transition: {type: 'spring', stiffness: 400, damping: 22},
+                                            }}
+                                            whileTap={prefersReducedMotion ? undefined : {
+                                                scale: 0.98,
+                                                transition: {type: 'spring', stiffness: 500, damping: 30},
+                                            }}
+                                            transition={{type: 'spring', stiffness: 300, damping: 25}}
+                                            className="flex items-center justify-center gap-2 rounded-lg border border-brand-border bg-brand-card/60 px-7 py-4 text-sm font-semibold text-[#f1eee6] backdrop-blur transition-colors hover:border-brand-accent/50 hover:bg-brand-card"
+                                        >
+                                            <LogIn className="h-4 w-4 text-brand-accent"/>
+                                            Войти в систему
+                                        </motion.button>
+                                    )}
+                                </motion.div>
                             </div>
-                        </div>
+
+                            <HeroTrafficConverter/>
+                        </motion.div>
                     </div>
 
                     <MetricsTape/>

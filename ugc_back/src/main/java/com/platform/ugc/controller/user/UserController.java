@@ -9,6 +9,7 @@ import com.platform.ugc.model.user.B2BPartnerTerms;
 import com.platform.ugc.model.user.ReferralTerms;
 import com.platform.ugc.model.user.Role;
 import com.platform.ugc.model.user.User;
+import com.platform.ugc.security.CurrentUserUtil;
 import com.platform.ugc.service.auth.OneTimeTokenService;
 import com.platform.ugc.service.user.UserService;
 import jakarta.validation.Valid;
@@ -36,6 +37,21 @@ public class UserController {
     @Value("${app.telegram.tg-bind-ttl-minutes:15}")
     private long tgBindTtlMinutes;
 
+    // NOTE on this whole controller: every {id}-scoped endpoint below now checks
+    // CurrentUserUtil.assertSelfOrAdmin(id) — the audit found that none of them compared the
+    // path-variable id to who was actually holding the JWT, so any authenticated user could read
+    // or mutate ANY other user's profile/wallet/referrals/bind-token by substituting a different
+    // id. /register, /{id}/ban, /{id}/role and /{id}/terms/** are additionally restricted to
+    // ROLE_ADMIN in SecurityConfig — they were reachable by any authenticated role before, which
+    // for /{id}/role in particular meant any Worker could grant themselves ROLE_ADMIN.
+
+    /**
+     * Self-service registration should go through POST /api/v1/auth/register (which whitelists
+     * targetRole to ADVERTISER/PARTNER). This endpoint is for admin-provisioned accounts
+     * (Moderator/Admin, or a Worker created by an admin without Telegram) — UserService.registerUser
+     * places no restriction on targetRole, so it must never be reachable by a non-admin (see the
+     * SecurityConfig rule added alongside this).
+     */
     @PostMapping("/register")
     public ResponseEntity<ResponseDTO<UserResponseDTO>> register(@Valid @RequestBody UserCreateRequestDTO request) {
         User user = userService.registerUser(request);
@@ -43,6 +59,13 @@ public class UserController {
                 .body(ResponseDTO.ok("Пользователь успешно зарегистрирован", UserResponseDTO.fromEntity(user)));
     }
 
+    /** The authenticated caller's own profile — always safe, needs no ownership check by construction. */
+    @GetMapping("/me")
+    public ResponseEntity<ResponseDTO<UserResponseDTO>> getCurrentUser() {
+        return ResponseEntity.ok(ResponseDTO.ok(userService.getUserProfile(CurrentUserUtil.id())));
+    }
+
+    /** ROLE_ADMIN only (see SecurityConfig) — returns every user's email/balances/wallet/PII. */
     @GetMapping
     public ResponseEntity<ResponseDTO<List<UserResponseDTO>>> getAllUsers() {
         return ResponseEntity.ok(ResponseDTO.ok(userService.getAllUsers()));
@@ -50,6 +73,7 @@ public class UserController {
 
     @GetMapping("/{id}")
     public ResponseEntity<ResponseDTO<UserResponseDTO>> getUserById(@PathVariable Long id) {
+        CurrentUserUtil.assertSelfOrAdmin(id);
         return ResponseEntity.ok(ResponseDTO.ok(userService.getUserProfile(id)));
     }
 
@@ -58,6 +82,7 @@ public class UserController {
             @PathVariable Long id,
             @RequestParam String walletAddress
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(id);
         userService.updateTrc20Wallet(id, walletAddress);
         return ResponseEntity.ok(ResponseDTO.ok("TRC-20 кошелек сохранен", null));
     }
@@ -67,9 +92,15 @@ public class UserController {
      * ({@code t.me/<bot>?start=bind_<token>}) — the frontend's "Link Telegram" banner (Advertiser/
      * Partner dashboards, shown while {@code telegramId} is null) points its button straight at
      * {@code deepLink}. Sending {@code /start bind_TOKEN} to the bot completes the binding.
+     * <p>
+     * Ownership check added: this used to accept ANY {@code id}, so any authenticated user could
+     * mint a bind token for someone else's account, send the deep link's /start command from
+     * their own Telegram, and take over that account (their telegramId would overwrite the
+     * victim's). Only the account owner (or an admin) may request a token for it now.
      */
     @PostMapping("/{id}/tg-bind-token")
     public ResponseEntity<ResponseDTO<TgBindTokenResponseDTO>> issueTgBindToken(@PathVariable Long id) {
+        CurrentUserUtil.assertSelfOrAdmin(id);
         User user = userService.getById(id);
         String token = oneTimeTokenService.issue(user, OneTimeToken.Purpose.TG_BIND, Duration.ofMinutes(tgBindTtlMinutes));
         String deepLink = "https://t.me/" + telegramBotUsername + "?start=bind_" + token;
@@ -79,6 +110,7 @@ public class UserController {
 
     @GetMapping("/{id}/referrals")
     public ResponseEntity<ResponseDTO<List<UserResponseDTO>>> getReferrals(@PathVariable Long id) {
+        CurrentUserUtil.assertSelfOrAdmin(id);
         return ResponseEntity.ok(ResponseDTO.ok(userService.getReferrals(id)));
     }
 

@@ -73,13 +73,19 @@ public class TelegramAuthService {
             throw new TelegramAuthException("Неверная подпись initData (HMAC-SHA256 mismatch)");
         }
 
+        // auth_date is HMAC-covered by Telegram itself and is always present in real initData —
+        // this used to only check freshness "if (authDateRaw != null)", silently skipping the
+        // replay-window check for any initData missing the field instead of rejecting it. Since
+        // the field is part of what's already signed, a genuinely absent one is itself a sign of
+        // tampering, not a benign edge case.
         String authDateRaw = params.get("auth_date");
-        if (authDateRaw != null) {
-            long authDate = Long.parseLong(authDateRaw);
-            long ageSeconds = Instant.now().getEpochSecond() - authDate;
-            if (ageSeconds > maxAgeSeconds) {
-                throw new TelegramAuthException("initData устарела (age=" + ageSeconds + "s)");
-            }
+        if (authDateRaw == null || authDateRaw.isBlank()) {
+            throw new TelegramAuthException("initData не содержит auth_date");
+        }
+        long authDate = Long.parseLong(authDateRaw);
+        long ageSeconds = Instant.now().getEpochSecond() - authDate;
+        if (ageSeconds > maxAgeSeconds) {
+            throw new TelegramAuthException("initData устарела (age=" + ageSeconds + "s)");
         }
 
         String userJson = params.get("user");

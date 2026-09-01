@@ -6,6 +6,7 @@ import com.platform.ugc.dto.submission.DisputeRequestDTO;
 import com.platform.ugc.dto.submission.SubmissionCreateRequestDTO;
 import com.platform.ugc.dto.submission.SubmissionResponseDTO;
 import com.platform.ugc.model.submission.Submission;
+import com.platform.ugc.security.CurrentUserUtil;
 import com.platform.ugc.service.submission.SubmissionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,10 @@ public class SubmissionController {
     public ResponseEntity<ResponseDTO<SubmissionResponseDTO>> submitVideo(
             @Valid @RequestBody SubmissionCreateRequestDTO request
     ) {
+        // request.workerId() is client-supplied — without this check, any authenticated user
+        // could submit a video "as" another worker (fraudulent credit, or griefing a worker with
+        // content that gets their account flagged/rejected).
+        CurrentUserUtil.assertSelfOrAdmin(request.workerId());
         Submission submission = submissionService.createSubmission(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ResponseDTO.ok("Видео отправлено на проверку", SubmissionResponseDTO.fromEntity(submission)));

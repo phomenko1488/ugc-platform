@@ -64,10 +64,16 @@ public class OneTimeTokenService {
      * elsewhere that forgets to check {@link OneTimeToken#isUsable()}, which is a stronger
      * guarantee than a boolean/timestamp flag — and it's what the password-reset flow specifically
      * requires (the reset must be a single request that leaves nothing reusable behind).
+     * <p>
+     * Uses {@link OneTimeTokenRepository#findByTokenAndPurposeForUpdate} (a
+     * {@code SELECT ... FOR UPDATE}) rather than the plain lookup: two concurrent requests
+     * presenting the same token now serialize on this row, so the second one always sees it
+     * already gone instead of both racing past {@link OneTimeToken#isUsable()} and both trying to
+     * "successfully" consume it.
      */
     @Transactional
     public Optional<User> consume(String token, OneTimeToken.Purpose purpose) {
-        Optional<OneTimeToken> found = tokenRepository.findByTokenAndPurpose(token, purpose);
+        Optional<OneTimeToken> found = tokenRepository.findByTokenAndPurposeForUpdate(token, purpose);
         if (found.isEmpty() || !found.get().isUsable()) {
             return Optional.empty();
         }

@@ -3,6 +3,7 @@ package com.platform.ugc.controller.payout;
 import com.platform.ugc.dto.ResponseDTO;
 import com.platform.ugc.dto.common.PageResponseDTO;
 import com.platform.ugc.dto.payout.PayoutResponseDTO;
+import com.platform.ugc.security.CurrentUserUtil;
 import com.platform.ugc.service.payout.PayoutService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -28,8 +29,14 @@ public class PayoutController {
     public record PayoutRequestDTO(Long userId, BigDecimal amount, String trc20Wallet) {
     }
 
+    // CRITICAL fix: request.userId() used to be trusted as-is, with nothing checking it against
+    // the caller. Any authenticated user could POST {userId: <victim>, amount: <victim's balance>,
+    // trc20Wallet: <attacker's address>} and drain another user's balance to a wallet they
+    // control. Only the account owner (or an admin, e.g. issuing a manual/compensatory payout on
+    // a user's behalf) may request a payout for a given userId now.
     @PostMapping
     public ResponseEntity<ResponseDTO<PayoutResponseDTO>> requestPayout(@RequestBody PayoutRequestDTO request) {
+        CurrentUserUtil.assertSelfOrAdmin(request.userId());
         PayoutResponseDTO created = payoutService.requestPayout(request.userId(), request.amount(), request.trc20Wallet());
         return ResponseEntity.status(HttpStatus.CREATED).body(ResponseDTO.ok("Заявка на вывод создана", created));
     }
@@ -40,6 +47,7 @@ public class PayoutController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
+        CurrentUserUtil.assertSelfOrAdmin(userId);
         return ResponseEntity.ok(ResponseDTO.ok(payoutService.getPayoutsForUser(userId, page, size)));
     }
 }

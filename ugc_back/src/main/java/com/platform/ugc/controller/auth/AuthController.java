@@ -19,9 +19,11 @@ import com.platform.ugc.security.JwtService;
 import com.platform.ugc.security.TelegramAuthException;
 import com.platform.ugc.security.TelegramAuthService;
 import com.platform.ugc.security.TelegramInitData;
+import com.platform.ugc.security.RateLimiter;
 import com.platform.ugc.service.auth.OneTimeTokenService;
 import com.platform.ugc.service.user.UserService;
 import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,9 +65,29 @@ public class AuthController {
     private final UserService userService;
     private final OneTimeTokenService oneTimeTokenService;
     private final EmailService emailService;
+    private final RateLimiter rateLimiter;
 
     @Value("${app.auth.password-reset-ttl-minutes:60}")
     private long passwordResetTtlMinutes;
+
+    // No rate-limiting/brute-force protection existed anywhere on these endpoints before this
+    // audit — /login allowed unlimited password guesses per account, /register allowed unlimited
+    // account-creation spam, /forgot-password allowed unlimited reset-email spam against any
+    // address. Limits below are per-IP (RateLimiter is in-memory/per-instance — see its javadoc).
+    private static final int LOGIN_MAX_ATTEMPTS = 10;
+    private static final long LOGIN_WINDOW_SECONDS = 5 * 60;
+    private static final int REGISTER_MAX_ATTEMPTS = 5;
+    private static final long REGISTER_WINDOW_SECONDS = 60 * 60;
+    private static final int FORGOT_PASSWORD_MAX_ATTEMPTS = 5;
+    private static final long FORGOT_PASSWORD_WINDOW_SECONDS = 60 * 60;
+
+    private static String clientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
+    }
 
     /**
      * Public self-registration. Only ROLE_ADVERTISER and ROLE_PARTNER may register this way —
@@ -74,7 +96,12 @@ public class AuthController {
      * account straight in, and fires a welcome email off-thread.
      */
     @PostMapping("/register")
-    public ResponseEntity<ApiEnvelope<AuthResponseDTO>> register(@Valid @RequestBody RegisterRequestDTO request) {
+    public ResponseEntity<ApiEnvelope<AuthResponseDTO>> register(@Valid @RequestBody RegisterRequestDTO request,
+                                                                  HttpServletRequest httpRequest) {
+        if (!rateLimiter.allow("register:" + clientIp(httpRequest), REGISTER_MAX_ATTEMPTS, REGISTER_WINDOW_SECONDS)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(ApiEnvelope.error("Слишком много попыток регистрации. Попробуйте позже."));
+        }
         if (request.role() != Role.ROLE_ADVERTISER && request.role() != Role.ROLE_PARTNER) {
             return ResponseEntity.badRequest().body(ApiEnvelope.error(
                     "Публичная регистрация доступна только для рекламодателя или партнера."));
@@ -101,7 +128,13 @@ public class AuthController {
      * registered — otherwise this endpoint would let anyone enumerate which emails have accounts.
      */
     @PostMapping("/forgot-password")
-    public ResponseEntity<ApiEnvelope<String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequestDTO request) {
+    public ResponseEntity<ApiEnvelope<String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequestDTO request,
+                                                               HttpServletRequest httpRequest) {
+        if (!rateLimiter.allow("forgot-password:" + clientIp(httpRequest), FORGOT_PASSWORD_MAX_ATTEMPTS, FORGOT_PASSWORD_WINDOW_SECONDS)) {
+            // Same generic message as the success path below — an attacker probing this endpoint
+            // shouldn't be able to tell rate-limiting apart from "email sent" by response shape.
+            return ResponseEntity.ok(ApiEnvelope.ok("Если такой email зарегистрирован, на него отправлена ссылка для сброса пароля."));
+        }
         userRepository.findByEmail(request.email().trim().toLowerCase())
                 .filter(u -> u.getPasswordHash() != null) // Telegram-only accounts have no password to reset.
                 .ifPresent(user -> {
@@ -135,9 +168,19 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiEnvelope<AuthResponseDTO>> login(@RequestBody LoginRequestDTO request) {
+    public ResponseEntity<ApiEnvelope<AuthResponseDTO>> login(@RequestBody LoginRequestDTO request,
+                                                               HttpServletRequest httpRequest) {
         if (isBlank(request.email()) || isBlank(request.password())) {
             return ResponseEntity.badRequest().body(ApiEnvelope.error("email и password обязательны"));
+        }
+
+        // Keyed by IP + email (not IP alone) so one slow/shared IP (office NAT, mobile carrier)
+        // can't lock out unrelated accounts, while still stopping a script from brute-forcing one
+        // account or spraying many accounts from a single source.
+        String rateLimitKey = "login:" + clientIp(httpRequest) + ":" + request.email().trim().toLowerCase();
+        if (!rateLimiter.allow(rateLimitKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SECONDS)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(ApiEnvelope.error("Слишком много попыток входа. Попробуйте позже."));
         }
 
         Optional<User> userOpt = userRepository.findByEmail(request.email());
