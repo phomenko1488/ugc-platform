@@ -32,12 +32,12 @@ export default function TelegramLinkBanner({ user }) {
     };
 
     return (
-        <div className="mx-4 mt-4 sm:mx-6 sm:mt-6 bg-sky-500/10 border border-sky-500/25 rounded-xl px-4 py-3 flex items-center gap-3 text-xs">
-            <div className="h-8 w-8 rounded-lg bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-400 shrink-0">
+        <div className="mx-4 mt-4 sm:mx-6 sm:mt-6 bg-brand-info/10 border border-brand-info/25 rounded-xl px-4 py-3 flex items-center gap-3 text-xs">
+            <div className="h-8 w-8 rounded-lg bg-brand-info/15 border border-brand-info/25 flex items-center justify-center text-brand-info shrink-0">
                 <Send className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sky-300">Привяжите Telegram, чтобы получать уведомления</div>
+                <div className="font-semibold text-brand-info">Привяжите Telegram, чтобы получать уведомления</div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
                     Новые сабмиты, остаток бюджета и статус выплат — прямо в Telegram.
                 </div>
@@ -47,7 +47,7 @@ export default function TelegramLinkBanner({ user }) {
                         href={deepLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[11px] text-sky-400 underline mt-1 inline-block"
+                        className="text-[11px] text-brand-info underline mt-1 inline-block"
                     >
                         Ссылка не открылась автоматически? Нажмите здесь.
                     </a>
@@ -56,7 +56,7 @@ export default function TelegramLinkBanner({ user }) {
             <button
                 onClick={handleLink}
                 disabled={loading}
-                className="shrink-0 flex items-center gap-1.5 bg-sky-500 hover:bg-sky-400 disabled:opacity-40 text-white font-bold text-[11px] px-3 py-2 rounded-lg transition-colors"
+                className="shrink-0 flex items-center gap-1.5 bg-brand-info hover:bg-brand-infoHover disabled:opacity-40 text-white font-bold text-[11px] px-3 py-2 rounded-lg transition-colors"
             >
                 {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
                 Открыть бота

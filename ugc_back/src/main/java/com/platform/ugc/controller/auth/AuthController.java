@@ -29,6 +29,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -112,7 +113,12 @@ public class AuthController {
         return ResponseEntity.ok(ApiEnvelope.ok("Если такой email зарегистрирован, на него отправлена ссылка для сброса пароля."));
     }
 
+    // @Transactional here (not just inside OneTimeTokenService.consume()) so token-deletion and
+    // the password-hash update commit together: if the save below ever failed, the token
+    // shouldn't already be gone, or the person would be locked out with no way to retry short of
+    // requesting a brand-new email.
     @PostMapping("/reset-password")
+    @Transactional
     public ResponseEntity<ApiEnvelope<String>> resetPassword(@Valid @RequestBody ResetPasswordRequestDTO request) {
         Optional<User> userOpt = oneTimeTokenService.consume(request.token(), OneTimeToken.Purpose.PASSWORD_RESET);
         if (userOpt.isEmpty()) {

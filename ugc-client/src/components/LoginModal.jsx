@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LogIn, Loader2, Workflow, UserPlus, KeyRound, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { api, authStorage } from '../api';
 
@@ -9,52 +9,71 @@ const TABS = [
 ];
 
 /**
- * Desktop email/password login (Module 1) for Advertiser / Moderator / Partner / Admin, now with
+ * Desktop email/password login (Module 1) for Advertiser / Moderator / Partner / Admin, with
  * public self-registration (Advertiser/Partner only, POST /api/v1/auth/register) and a
- * forgot/reset-password flow (one-time-token based, sent by email — see EmailService).
- * Workers authenticate automatically via Telegram WebApp — see App.jsx's useTelegramAuth effect,
- * this modal never shows up inside an actual Telegram Mini App session.
+ * forgot-password request form (the actual reset now happens on its own page — see
+ * ResetPasswordPage — reached via the link the email sends, not by pasting a token here).
+ * Workers authenticate automatically via Telegram WebApp — see App.jsx's bootstrap effect, this
+ * modal never shows up inside an actual Telegram Mini App session.
  *
- * `onBack` is optional — App.jsx passes it now that anonymous visitors land on LandingPage first,
- * so this modal needs a way back to it; omitting the prop just hides the link (e.g. if some other
- * caller wants this as the sole anonymous-state screen again).
+ * Mounted at the /login route as a true overlay on top of LandingPage (fixed inset-0 + backdrop),
+ * not a full-page takeover — App.jsx keeps LandingPage rendered underneath so the two together
+ * read as "a modal opened over the landing page", matching how the rest of the app treats /login.
+ * `onBack` closes it (click the backdrop, the back link, or Escape) by navigating to "/".
  */
 export default function LoginModal({ onAuthenticated, onBack }) {
     const [tab, setTab] = useState('LOGIN');
 
+    // Standard modal manners: Escape closes it, and the body doesn't scroll behind it while open.
+    useEffect(() => {
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') onBack?.();
+        };
+        document.addEventListener('keydown', onKeyDown);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', onKeyDown);
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [onBack]);
+
     return (
-        <div className="min-h-screen bg-brand-bg flex items-center justify-center p-4">
-            <div className="bg-brand-card border border-brand-border p-8 rounded-2xl max-w-sm w-full shadow-xl space-y-6">
+        <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onBack?.();
+            }}
+        >
+            <div className="w-full max-w-sm space-y-6 rounded-2xl border border-brand-border bg-brand-card p-8 shadow-2xl">
                 {onBack && (
                     <button
                         type="button"
                         onClick={onBack}
-                        className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+                        className="flex items-center gap-1.5 text-[11px] text-slate-500 transition-colors hover:text-slate-300"
                     >
-                        <ArrowLeft className="w-3 h-3" />
+                        <ArrowLeft className="h-3 w-3" />
                         На главную
                     </button>
                 )}
                 <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-brand-accent/10 border border-brand-accent/30 flex items-center justify-center text-brand-accent">
-                        <Workflow className="w-5 h-5" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-accent/30 bg-brand-accent/10 text-brand-accent">
+                        <Workflow className="h-5 w-5" />
                     </div>
                     <div>
-                        <div className="font-bold text-lg text-white">Selika</div>
+                        <div className="font-bold text-lg text-ash">Selika</div>
                         <div className="text-[11px] text-slate-400">Рекламодатель / Модератор / Партнер</div>
                     </div>
                 </div>
 
-                <div className="flex bg-brand-bg border border-brand-border rounded-xl p-1 gap-1">
+                <div className="flex gap-1 rounded-xl border border-brand-border bg-brand-bg p-1">
                     {TABS.map((t) => (
                         <button
                             key={t.key}
                             type="button"
                             onClick={() => setTab(t.key)}
-                            className={`flex-1 text-[11px] font-semibold py-2 rounded-lg transition-colors ${
-                                tab === t.key
-                                    ? 'bg-brand-accent text-brand-bg'
-                                    : 'text-slate-400 hover:text-white'
+                            className={`flex-1 rounded-lg py-2 text-[11px] font-semibold transition-colors ${
+                                tab === t.key ? 'bg-brand-accent text-brand-bg' : 'text-slate-400 hover:text-white'
                             }`}
                         >
                             {t.label}
@@ -67,7 +86,7 @@ export default function LoginModal({ onAuthenticated, onBack }) {
                 {tab === 'FORGOT' && <ForgotPasswordForm onDone={() => setTab('LOGIN')} />}
 
                 {tab === 'LOGIN' && (
-                    <p className="text-[10px] text-slate-500 text-center">
+                    <p className="text-center text-[10px] text-slate-500">
                         Воркеры авторизуются автоматически через Telegram Mini App.
                     </p>
                 )}
@@ -100,7 +119,7 @@ function LoginForm({ onAuthenticated }) {
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email</label>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Email</label>
                 <input
                     type="email"
                     required
@@ -108,11 +127,11 @@ function LoginForm({ onAuthenticated }) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="adv@stake.com"
-                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent"
+                    className="w-full rounded-xl border border-brand-border bg-brand-bg px-3.5 py-2.5 text-xs text-white focus:border-brand-accent focus:outline-none"
                 />
             </div>
             <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Пароль</label>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Пароль</label>
                 <input
                     type="password"
                     required
@@ -120,12 +139,12 @@ function LoginForm({ onAuthenticated }) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent"
+                    className="w-full rounded-xl border border-brand-border bg-brand-bg px-3.5 py-2.5 text-xs text-white focus:border-brand-accent focus:outline-none"
                 />
             </div>
 
             {error && (
-                <div className="text-xs text-brand-danger bg-brand-danger/10 border border-brand-danger/20 rounded-xl px-3 py-2">
+                <div className="rounded-xl border border-brand-danger/20 bg-brand-danger/10 px-3 py-2 text-xs text-brand-danger">
                     {error}
                 </div>
             )}
@@ -133,9 +152,9 @@ function LoginForm({ onAuthenticated }) {
             <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-brand-accent hover:bg-brand-accentHover disabled:opacity-40 text-brand-bg font-bold text-xs py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-accent py-3 text-xs font-bold text-brand-bg transition-all hover:bg-brand-accentHover disabled:opacity-40"
             >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                 {loading ? 'Входим...' : 'Войти'}
             </button>
         </form>
@@ -175,15 +194,15 @@ function RegisterForm({ onAuthenticated }) {
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Роль</label>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Роль</label>
                 <div className="grid grid-cols-2 gap-2">
                     <button
                         type="button"
                         onClick={() => setRole('ROLE_ADVERTISER')}
-                        className={`text-[11px] font-semibold py-2.5 rounded-xl border transition-colors ${
+                        className={`rounded-xl border py-2.5 text-[11px] font-semibold transition-colors ${
                             role === 'ROLE_ADVERTISER'
-                                ? 'bg-brand-accent/10 border-brand-accent text-brand-accent'
-                                : 'bg-brand-bg border-brand-border text-slate-400 hover:text-white'
+                                ? 'border-brand-accent bg-brand-accent/10 text-brand-accent'
+                                : 'border-brand-border bg-brand-bg text-slate-400 hover:text-white'
                         }`}
                     >
                         Рекламодатель
@@ -191,10 +210,10 @@ function RegisterForm({ onAuthenticated }) {
                     <button
                         type="button"
                         onClick={() => setRole('ROLE_PARTNER')}
-                        className={`text-[11px] font-semibold py-2.5 rounded-xl border transition-colors ${
+                        className={`rounded-xl border py-2.5 text-[11px] font-semibold transition-colors ${
                             role === 'ROLE_PARTNER'
-                                ? 'bg-brand-accent/10 border-brand-accent text-brand-accent'
-                                : 'bg-brand-bg border-brand-border text-slate-400 hover:text-white'
+                                ? 'border-brand-accent bg-brand-accent/10 text-brand-accent'
+                                : 'border-brand-border bg-brand-bg text-slate-400 hover:text-white'
                         }`}
                     >
                         Партнер
@@ -203,18 +222,18 @@ function RegisterForm({ onAuthenticated }) {
             </div>
 
             <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Имя пользователя</label>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Имя пользователя</label>
                 <input
                     type="text"
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="stake_casino"
-                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent"
+                    className="w-full rounded-xl border border-brand-border bg-brand-bg px-3.5 py-2.5 text-xs text-white focus:border-brand-accent focus:outline-none"
                 />
             </div>
             <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email</label>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Email</label>
                 <input
                     type="email"
                     required
@@ -222,11 +241,11 @@ function RegisterForm({ onAuthenticated }) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="adv@stake.com"
-                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent"
+                    className="w-full rounded-xl border border-brand-border bg-brand-bg px-3.5 py-2.5 text-xs text-white focus:border-brand-accent focus:outline-none"
                 />
             </div>
             <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Пароль</label>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Пароль</label>
                 <input
                     type="password"
                     required
@@ -235,24 +254,24 @@ function RegisterForm({ onAuthenticated }) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent"
+                    className="w-full rounded-xl border border-brand-border bg-brand-bg px-3.5 py-2.5 text-xs text-white focus:border-brand-accent focus:outline-none"
                 />
             </div>
             <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Реферальный код <span className="text-slate-500 font-normal">(опционально)</span>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">
+                    Реферальный код <span className="font-normal text-slate-500">(опционально)</span>
                 </label>
                 <input
                     type="text"
                     value={refTag}
                     onChange={(e) => setRefTag(e.target.value)}
                     placeholder="ptn_abc123"
-                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent font-mono"
+                    className="w-full rounded-xl border border-brand-border bg-brand-bg px-3.5 py-2.5 font-mono text-xs text-white focus:border-brand-accent focus:outline-none"
                 />
             </div>
 
             {error && (
-                <div className="text-xs text-brand-danger bg-brand-danger/10 border border-brand-danger/20 rounded-xl px-3 py-2">
+                <div className="rounded-xl border border-brand-danger/20 bg-brand-danger/10 px-3 py-2 text-xs text-brand-danger">
                     {error}
                 </div>
             )}
@@ -260,23 +279,27 @@ function RegisterForm({ onAuthenticated }) {
             <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-brand-accent hover:bg-brand-accentHover disabled:opacity-40 text-brand-bg font-bold text-xs py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-accent py-3 text-xs font-bold text-brand-bg transition-all hover:bg-brand-accentHover disabled:opacity-40"
             >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                 {loading ? 'Регистрация...' : 'Зарегистрироваться'}
             </button>
         </form>
     );
 }
 
+/**
+ * Request-only now — submitting an email fires POST /auth/forgot-password and the real "set a
+ * new password" step happens on the dedicated /reset-password page reached via the emailed link
+ * (see ResetPasswordPage), which reads the token from the URL instead of asking anyone to copy
+ * and paste it into a form.
+ */
 function ForgotPasswordForm({ onDone }) {
-    const [step, setStep] = useState('REQUEST'); // REQUEST -> SENT -> RESET
     const [email, setEmail] = useState('');
-    const [token, setToken] = useState('');
-    const [newPassword, setNewPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [message, setMessage] = useState(null);
+    const [sent, setSent] = useState(false);
 
     const handleRequest = async (e) => {
         e.preventDefault();
@@ -285,7 +308,7 @@ function ForgotPasswordForm({ onDone }) {
             setError(null);
             const msg = await api.forgotPassword(email);
             setMessage(msg || 'Если такой email зарегистрирован, на него отправлена ссылка для сброса пароля.');
-            setStep('SENT');
+            setSent(true);
         } catch (err) {
             setError(err.message || 'Не удалось отправить запрос');
         } finally {
@@ -293,92 +316,33 @@ function ForgotPasswordForm({ onDone }) {
         }
     };
 
-    const handleReset = async (e) => {
-        e.preventDefault();
-        try {
-            setLoading(true);
-            setError(null);
-            await api.resetPassword(token.trim(), newPassword);
-            setMessage('Пароль успешно изменен. Теперь вы можете войти.');
-            setStep('DONE');
-        } catch (err) {
-            setError(err.message || 'Не удалось сбросить пароль. Проверьте токен.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (step === 'DONE') {
+    if (sent) {
         return (
             <div className="space-y-4 text-center">
-                <CheckCircle2 className="w-8 h-8 text-brand-success mx-auto" />
+                <CheckCircle2 className="mx-auto h-8 w-8 text-brand-success" />
                 <p className="text-xs text-slate-300">{message}</p>
+                <p className="text-[11px] text-slate-500">
+                    Перейдите по ссылке из письма — она откроет страницу сброса пароля с уже подставленным токеном.
+                </p>
                 <button
                     type="button"
                     onClick={onDone}
-                    className="w-full bg-brand-accent hover:bg-brand-accentHover text-brand-bg font-bold text-xs py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-accent py-3 text-xs font-bold text-brand-bg transition-all hover:bg-brand-accentHover"
                 >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="h-4 w-4" />
                     Ко входу
                 </button>
             </div>
         );
     }
 
-    if (step === 'SENT') {
-        return (
-            <form onSubmit={handleReset} className="space-y-4">
-                <p className="text-[11px] text-slate-400">{message}</p>
-                <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">Токен из письма</label>
-                    <input
-                        type="text"
-                        required
-                        value={token}
-                        onChange={(e) => setToken(e.target.value)}
-                        placeholder="Вставьте токен сброса пароля"
-                        className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent font-mono"
-                    />
-                </div>
-                <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">Новый пароль</label>
-                    <input
-                        type="password"
-                        required
-                        minLength={6}
-                        autoComplete="new-password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent"
-                    />
-                </div>
-
-                {error && (
-                    <div className="text-xs text-brand-danger bg-brand-danger/10 border border-brand-danger/20 rounded-xl px-3 py-2">
-                        {error}
-                    </div>
-                )}
-
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-brand-accent hover:bg-brand-accentHover disabled:opacity-40 text-brand-bg font-bold text-xs py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-                >
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-                    {loading ? 'Сохранение...' : 'Установить новый пароль'}
-                </button>
-            </form>
-        );
-    }
-
     return (
         <form onSubmit={handleRequest} className="space-y-4">
             <p className="text-[11px] text-slate-400">
-                Укажите email — мы отправим на него ссылку/токен для сброса пароля.
+                Укажите email — мы отправим на него ссылку для сброса пароля.
             </p>
             <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email</label>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Email</label>
                 <input
                     type="email"
                     required
@@ -386,12 +350,12 @@ function ForgotPasswordForm({ onDone }) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="adv@stake.com"
-                    className="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent"
+                    className="w-full rounded-xl border border-brand-border bg-brand-bg px-3.5 py-2.5 text-xs text-white focus:border-brand-accent focus:outline-none"
                 />
             </div>
 
             {error && (
-                <div className="text-xs text-brand-danger bg-brand-danger/10 border border-brand-danger/20 rounded-xl px-3 py-2">
+                <div className="rounded-xl border border-brand-danger/20 bg-brand-danger/10 px-3 py-2 text-xs text-brand-danger">
                     {error}
                 </div>
             )}
@@ -399,9 +363,9 @@ function ForgotPasswordForm({ onDone }) {
             <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-brand-accent hover:bg-brand-accentHover disabled:opacity-40 text-brand-bg font-bold text-xs py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-accent py-3 text-xs font-bold text-brand-bg transition-all hover:bg-brand-accentHover disabled:opacity-40"
             >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
                 {loading ? 'Отправка...' : 'Отправить ссылку для сброса'}
             </button>
         </form>

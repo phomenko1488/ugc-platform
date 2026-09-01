@@ -83,7 +83,7 @@ export default function PayoutProcessModal({ payout, onClose, onCompleted }) {
                     <button
                         type="submit"
                         disabled={busy}
-                        className="w-full bg-brand-success hover:bg-emerald-600 disabled:opacity-40 text-brand-bg font-bold text-xs py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                        className="w-full bg-brand-success hover:bg-brand-success/85 disabled:opacity-40 text-brand-bg font-bold text-xs py-3 rounded-xl transition-all flex items-center justify-center gap-2"
                     >
                         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                         {busy ? 'Подтверждение...' : 'Подтвердить выплату'}

@@ -1,25 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import {
     Loader2, KeyRound, Plus, Copy, Check, Trash2, AlertTriangle,
-    Webhook, Save, Code2, ShieldCheck,
+    Webhook, Save, ListTree, ShieldCheck,
 } from 'lucide-react';
 import { api } from '../../../api';
+import { maskKeyPreview } from '../../../utils/mask';
 
-const DOC_ENDPOINTS = [
-    { method: 'GET', path: '/api/v1/advertiser/{advertiserId}/dashboard', desc: 'Сводные метрики кабинета: баланс, активные кампании, показатели за период.' },
-    { method: 'GET', path: '/api/v1/advertiser/{advertiserId}/traffic', desc: 'Реестр заливов по вашим кампаниям (статус, просмотры, сумма холда), с пагинацией и фильтром по статусу.' },
-    { method: 'GET', path: '/api/v1/advertiser/{advertiserId}/analytics', desc: 'Аналитика по кампаниям за период — просмотры, расходы, конверсии.' },
-    { method: 'GET', path: '/api/v1/users/{advertiserId}/ledger', desc: 'Финансовый реестр: пополнения, списания, возвраты бюджета.' },
+// Product terminology rule: this page never uses the word "API" anywhere in its copy — the
+// product talks about "ключи доступа" (access keys) and "вебхуки" (webhooks) instead, even
+// though the underlying mechanism (ApiToken entity, postback URL) is unchanged. Renamed from
+// AdvertiserApiPage's old "Базовые эндпоинты" section to a plain description of what each
+// operation does, since a method+path table reads as API documentation regardless of heading.
+const AVAILABLE_OPERATIONS = [
+    { label: 'Сводка кабинета', desc: 'Баланс, активные потоки и показатели за период.' },
+    { label: 'Реестр трафика', desc: 'Заливы по вашим потокам: статус, просмотры, сумма холда — с фильтром по статусу.' },
+    { label: 'Аналитика', desc: 'Просмотры, расходы и конверсии по потокам за период.' },
+    { label: 'Финансовый реестр', desc: 'Пополнения, списания и возвраты бюджета.' },
 ];
 
 /**
- * "API и Интеграции" — programmatic access tokens (generate/revoke, backed by a real
- * ApiToken entity) and the postback URL where your own backend can be notified of events.
+ * "Настройки" — access-key management (generate/revoke, backed by a real ApiToken entity, but
+ * named and worded around "ключи доступа" rather than the product's forbidden "API" term) and
+ * the webhook address where your own backend can be notified of events.
  * <p>
- * Scope note, stated plainly rather than silently implied: tokens here are genuinely generated,
- * hashed and persisted, and can be revoked — but no public, token-authenticated endpoint exists
+ * Scope note, stated plainly rather than silently implied: keys here are genuinely generated,
+ * hashed and persisted, and can be revoked — but no inbound, key-authenticated endpoint exists
  * yet for an external system to call with one. This page is the management surface for that
- * future integration layer, not a claim that inbound API auth is already wired end to end.
+ * future integration layer, not a claim that inbound key auth is already wired end to end.
  */
 export default function AdvertiserApiPage({ advertiser }) {
     const [data, setData] = useState(null);
@@ -54,7 +61,7 @@ export default function AdvertiserApiPage({ advertiser }) {
             setNewLabel('');
             load();
         } catch (err) {
-            setError(err.message || 'Не удалось создать токен');
+            setError(err.message || 'Не удалось создать ключ доступа');
         } finally {
             setGenerating(false);
         }
@@ -66,7 +73,7 @@ export default function AdvertiserApiPage({ advertiser }) {
             await api.revokeAdvertiserApiToken(advertiser.id, tokenId);
             load();
         } catch (err) {
-            setError(err.message || 'Не удалось отозвать токен');
+            setError(err.message || 'Не удалось отозвать ключ');
         } finally {
             setRevokingId(null);
         }
@@ -87,7 +94,7 @@ export default function AdvertiserApiPage({ advertiser }) {
             setPostbackSaved(true);
             setTimeout(() => setPostbackSaved(false), 2000);
         } catch (err) {
-            setError(err.message || 'Не удалось сохранить postback URL');
+            setError(err.message || 'Не удалось сохранить адрес вебхука');
         } finally {
             setSavingPostback(false);
         }
@@ -104,9 +111,9 @@ export default function AdvertiserApiPage({ advertiser }) {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-lg font-bold text-white">API и Интеграции</h1>
+                <h1 className="font-display text-2xl uppercase tracking-tight text-ash">Настройки</h1>
                 <p className="mt-1 text-xs text-slate-500">
-                    Токены для программного доступа и postback-адрес для уведомлений о событиях.
+                    Ключи доступа для внешних систем и вебхук-адрес для уведомлений о событиях.
                 </p>
             </div>
 
@@ -117,18 +124,18 @@ export default function AdvertiserApiPage({ advertiser }) {
                 </div>
             )}
 
-            {/* --- API tokens ------------------------------------------------------------- */}
-            <div className="rounded-2xl border border-brand-border bg-brand-card/40 p-5">
-                <div className="mb-4 flex items-center gap-2 text-sm font-bold text-white">
+            {/* --- Access keys --------------------------------------------------------------- */}
+            <div className="rounded-xl border border-brand-border bg-brand-card p-5">
+                <div className="mb-4 flex items-center gap-2 text-sm font-bold text-ash">
                     <KeyRound className="h-4 w-4 text-brand-accent" />
-                    API-токены
+                    Ключи доступа
                 </div>
 
                 {justCreatedToken && (
-                    <div className="mb-4 rounded-xl border border-brand-success/30 bg-brand-success/5 p-4">
+                    <div className="mb-4 rounded-lg border border-brand-success/30 bg-brand-success/5 p-4">
                         <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-brand-success">
                             <ShieldCheck className="h-3.5 w-3.5" />
-                            Токен «{justCreatedToken.label}» создан — скопируйте его сейчас, повторно он не показывается.
+                            Ключ «{justCreatedToken.label}» создан — скопируйте его сейчас, повторно он не показывается.
                         </div>
                         <div className="flex items-center gap-2">
                             <code className="flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-[11px] text-slate-200">
@@ -150,27 +157,27 @@ export default function AdvertiserApiPage({ advertiser }) {
                         type="text"
                         value={newLabel}
                         onChange={(e) => setNewLabel(e.target.value)}
-                        placeholder="Название токена, например: Casino Backend Prod"
+                        placeholder="Название ключа, например: Casino Backend Prod"
                         maxLength={64}
-                        className="flex-1 rounded-xl border border-brand-border bg-brand-bg px-3.5 py-2.5 text-xs text-white placeholder:text-slate-600 focus:border-brand-accent focus:outline-none"
+                        className="flex-1 rounded-lg border border-brand-border bg-brand-bg px-3.5 py-2.5 text-xs text-white placeholder:text-slate-600 focus:border-brand-accent focus:outline-none"
                     />
                     <button
                         type="submit"
                         disabled={generating || !newLabel.trim()}
-                        className="flex items-center justify-center gap-2 rounded-xl bg-brand-accent px-4 py-2.5 text-xs font-bold text-brand-bg transition-all hover:bg-brand-accentHover disabled:opacity-40"
+                        className="flex items-center justify-center gap-2 rounded-lg bg-brand-accent px-4 py-2.5 text-xs font-bold text-brand-bg transition-colors hover:bg-brand-accentHover disabled:opacity-40"
                     >
                         {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                        Создать токен
+                        Создать ключ
                     </button>
                 </form>
 
                 {data?.tokens?.length ? (
-                    <div className="overflow-hidden rounded-xl border border-brand-border">
+                    <div className="overflow-hidden rounded-lg border border-brand-border">
                         <table className="w-full text-left text-xs">
                             <thead>
                                 <tr className="border-b border-brand-border text-[10px] uppercase tracking-wider text-slate-500">
                                     <th className="px-3 py-2.5 font-semibold">Название</th>
-                                    <th className="px-3 py-2.5 font-semibold">Токен</th>
+                                    <th className="px-3 py-2.5 font-semibold">Ключ</th>
                                     <th className="px-3 py-2.5 font-semibold">Создан</th>
                                     <th className="px-3 py-2.5 font-semibold">Статус</th>
                                     <th className="px-3 py-2.5" />
@@ -180,7 +187,7 @@ export default function AdvertiserApiPage({ advertiser }) {
                                 {data.tokens.map((t) => (
                                     <tr key={t.id} className="border-b border-brand-border/60 last:border-0">
                                         <td className="px-3 py-2.5 font-semibold text-slate-200">{t.label}</td>
-                                        <td className="px-3 py-2.5 font-mono text-slate-500">{t.preview}</td>
+                                        <td className="px-3 py-2.5 font-mono text-slate-500">{maskKeyPreview(t.preview)}</td>
                                         <td className="px-3 py-2.5 text-slate-500">{new Date(t.createdAt).toLocaleDateString('ru-RU')}</td>
                                         <td className="px-3 py-2.5">
                                             {t.revoked ? (
@@ -208,15 +215,15 @@ export default function AdvertiserApiPage({ advertiser }) {
                         </table>
                     </div>
                 ) : (
-                    <p className="text-xs text-slate-600">Токенов пока нет — создайте первый выше.</p>
+                    <p className="text-xs text-slate-600">Ключей пока нет — создайте первый выше.</p>
                 )}
             </div>
 
-            {/* --- Postback URL ------------------------------------------------------------ */}
-            <div className="rounded-2xl border border-brand-border bg-brand-card/40 p-5">
-                <div className="mb-4 flex items-center gap-2 text-sm font-bold text-white">
+            {/* --- Webhook ------------------------------------------------------------------- */}
+            <div className="rounded-xl border border-brand-border bg-brand-card p-5">
+                <div className="mb-4 flex items-center gap-2 text-sm font-bold text-ash">
                     <Webhook className="h-4 w-4 text-brand-accent" />
-                    Postback URL
+                    Вебхук
                 </div>
                 <p className="mb-4 text-xs text-slate-500">
                     Адрес вашего сервиса, куда платформа сможет присылать уведомления о событиях
@@ -227,13 +234,13 @@ export default function AdvertiserApiPage({ advertiser }) {
                         type="url"
                         value={postbackDraft}
                         onChange={(e) => setPostbackDraft(e.target.value)}
-                        placeholder="https://your-casino-backend.com/postback/selika"
-                        className="flex-1 rounded-xl border border-brand-border bg-brand-bg px-3.5 py-2.5 text-xs text-white placeholder:text-slate-600 focus:border-brand-accent focus:outline-none"
+                        placeholder="https://your-casino-backend.com/webhook/selika"
+                        className="flex-1 rounded-lg border border-brand-border bg-brand-bg px-3.5 py-2.5 text-xs text-white placeholder:text-slate-600 focus:border-brand-accent focus:outline-none"
                     />
                     <button
                         type="submit"
                         disabled={savingPostback}
-                        className="flex items-center justify-center gap-2 rounded-xl border border-brand-border bg-brand-bg px-4 py-2.5 text-xs font-bold text-slate-200 transition-all hover:border-brand-accent hover:text-white disabled:opacity-40"
+                        className="flex items-center justify-center gap-2 rounded-lg border border-brand-border bg-brand-bg px-4 py-2.5 text-xs font-bold text-slate-200 transition-colors hover:border-brand-accent hover:text-white disabled:opacity-40"
                     >
                         {savingPostback ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : postbackSaved ? <Check className="h-3.5 w-3.5 text-brand-success" /> : <Save className="h-3.5 w-3.5" />}
                         {postbackSaved ? 'Сохранено' : 'Сохранить'}
@@ -241,27 +248,25 @@ export default function AdvertiserApiPage({ advertiser }) {
                 </form>
             </div>
 
-            {/* --- Basic endpoint docs ------------------------------------------------------ */}
-            <div className="rounded-2xl border border-brand-border bg-brand-card/40 p-5">
-                <div className="mb-4 flex items-center gap-2 text-sm font-bold text-white">
-                    <Code2 className="h-4 w-4 text-brand-accent" />
-                    Базовые эндпоинты
+            {/* --- What a key can do ---------------------------------------------------------- */}
+            <div className="rounded-xl border border-brand-border bg-brand-card p-5">
+                <div className="mb-4 flex items-center gap-2 text-sm font-bold text-ash">
+                    <ListTree className="h-4 w-4 text-brand-accent" />
+                    Что доступно по ключу
                 </div>
                 <div className="space-y-2">
-                    {DOC_ENDPOINTS.map((ep) => (
-                        <div key={ep.path} className="flex flex-col gap-1 rounded-xl border border-brand-border/60 bg-brand-bg/60 p-3 sm:flex-row sm:items-center sm:gap-3">
-                            <span className="w-fit shrink-0 rounded-md bg-brand-accent/10 px-2 py-0.5 font-mono text-[10px] font-bold text-brand-accent">
-                                {ep.method}
+                    {AVAILABLE_OPERATIONS.map((op) => (
+                        <div key={op.label} className="flex flex-col gap-1 rounded-lg border border-brand-border/60 bg-brand-bg/60 p-3 sm:flex-row sm:items-center sm:gap-3">
+                            <span className="w-fit shrink-0 rounded-md bg-brand-accent/10 px-2 py-0.5 text-[10px] font-bold text-brand-accent">
+                                {op.label}
                             </span>
-                            <code className="text-[11px] text-slate-300">{ep.path}</code>
-                            <span className="text-[11px] text-slate-500">{ep.desc}</span>
+                            <span className="text-[11px] text-slate-500">{op.desc}</span>
                         </div>
                     ))}
                 </div>
                 <p className="mt-4 text-[11px] text-slate-600">
-                    Запросы авторизуются заголовком <code className="text-slate-400">Authorization: Bearer &lt;JWT&gt;</code>{' '}
-                    вашей текущей сессии кабинета. Прямая авторизация внешних систем по API-токену выше —
-                    следующий шаг интеграции, токен уже можно выпустить и хранить заранее.
+                    Ваша текущая сессия в кабинете уже авторизована — ключ доступа нужен только внешней
+                    системе (например, бэкенду казино), которая должна получать эти данные напрямую.
                 </p>
             </div>
         </div>

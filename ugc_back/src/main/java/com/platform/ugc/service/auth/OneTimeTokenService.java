@@ -57,7 +57,14 @@ public class OneTimeTokenService {
         return tokenRepository.findByTokenAndPurpose(token, purpose).filter(OneTimeToken::isUsable);
     }
 
-    /** Validates, marks used, and returns the owning user — or empty if the token is missing/expired/already used. */
+    /**
+     * Validates, deletes the token from the database, and returns the owning user — or empty if
+     * the token is missing/expired/already used. Deleting it outright (rather than only setting
+     * {@code usedAt}) is deliberate: a row that no longer exists can't be replayed even by a bug
+     * elsewhere that forgets to check {@link OneTimeToken#isUsable()}, which is a stronger
+     * guarantee than a boolean/timestamp flag — and it's what the password-reset flow specifically
+     * requires (the reset must be a single request that leaves nothing reusable behind).
+     */
     @Transactional
     public Optional<User> consume(String token, OneTimeToken.Purpose purpose) {
         Optional<OneTimeToken> found = tokenRepository.findByTokenAndPurpose(token, purpose);
@@ -65,8 +72,9 @@ public class OneTimeTokenService {
             return Optional.empty();
         }
         OneTimeToken ott = found.get();
-        ott.setUsedAt(Instant.now());
-        tokenRepository.save(ott);
-        return Optional.of(ott.getUser());
+        User user = ott.getUser();
+        tokenRepository.delete(ott);
+        log.info("Consumed and deleted one-time token [purpose={}, userId={}]", purpose, user.getId());
+        return Optional.of(user);
     }
 }

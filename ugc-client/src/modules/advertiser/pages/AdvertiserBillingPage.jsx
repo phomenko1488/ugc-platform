@@ -10,17 +10,21 @@ const LEDGER_TYPE_LABELS = {
     PLATFORM_NET_PROFIT: 'Чистая прибыль платформы',
     ADVERTISER_DEPOSIT: 'Пополнение баланса',
     WORKER_WITHDRAWAL: 'Вывод средств воркером',
-    ADVERTISER_BUDGET_REFUND: 'Возврат бюджета кампании',
+    ADVERTISER_BUDGET_REFUND: 'Возврат бюджета потока',
 };
 
 // No real payment gateway is wired up yet — this is a fixed demo deposit address so the top-up
 // flow has something to display/copy, purely for the simulated USDT TRC-20 top-up UX.
 const DEMO_DEPOSIT_ADDRESS = 'TDemoUGCFlowEscrowAddr000000000X';
 
+const TABLE_HEAD_CLASS = 'px-4 py-3 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500';
+
 /**
- * Billing page — escrow balance, a simulated USDT TRC-20 top-up (no real payment rail exists
+ * "Выплаты" — escrow balance, a simulated USDT TRC-20 top-up (no real payment rail exists
  * yet; it just credits availableBalance and records an ADVERTISER_DEPOSIT ledger entry), and the
- * full financial ledger statement (deposits, campaign refunds, etc.).
+ * full financial ledger statement as a real table (type, поток, просмотры, дата, сумма) instead
+ * of a stacked card list — matching the "финансовые таблицы... с чистой сеткой" requirement, and
+ * the same table language AdminPayoutsPage already uses for the platform's other financial view.
  */
 export default function AdvertiserBillingPage({ advertiser, onBalanceChanged }) {
     const [amount, setAmount] = useState('');
@@ -79,41 +83,44 @@ export default function AdvertiserBillingPage({ advertiser, onBalanceChanged }) 
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center gap-2">
-                <Wallet2 className="w-5 h-5 text-brand-accent" />
-                <h2 className="text-base font-bold text-white">Биллинг</h2>
+            <div>
+                <h1 className="font-display text-2xl uppercase tracking-tight text-ash">Выплаты</h1>
+                <p className="mt-1 text-xs text-slate-500">Баланс эскроу, пополнение и полная выписка по счёту.</p>
             </div>
 
-            <div className="bg-brand-card border border-brand-border p-5 rounded-2xl">
-                <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Доступный баланс (Escrow)</div>
-                <div className="text-2xl font-bold font-mono text-brand-success mt-1.5">
-                    ${Number(advertiser?.availableBalance || 0).toFixed(2)}
+            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-brand-border bg-brand-border sm:grid-cols-2">
+                <div className="bg-brand-card p-5">
+                    <div className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+                        <Wallet2 className="h-3 w-3" /> Доступный баланс (Escrow)
+                    </div>
+                    <div className="mt-2 font-mono text-2xl font-bold text-brand-success">
+                        ${Number(advertiser?.availableBalance || 0).toFixed(2)}
+                    </div>
                 </div>
-            </div>
-
-            <div className="bg-brand-card border border-brand-border p-5 rounded-2xl space-y-4">
-                <h3 className="text-sm font-bold text-white">Пополнить баланс (USDT TRC-20)</h3>
-
-                <div className="bg-brand-bg border border-brand-border rounded-xl p-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex items-center gap-2">
-                        <QrCode className="w-8 h-8 text-slate-500 shrink-0" />
-                        <div className="min-w-0">
-                            <div className="text-[9px] text-slate-500 uppercase font-semibold">Адрес для пополнения</div>
-                            <div className="text-[11px] font-mono text-slate-300 truncate">{DEMO_DEPOSIT_ADDRESS}</div>
-                        </div>
+                <div className="flex items-center justify-between gap-3 bg-brand-card p-5">
+                    <div className="min-w-0">
+                        <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">Адрес для пополнения (USDT TRC-20)</div>
+                        <div className="mt-1.5 truncate font-mono text-[11px] text-slate-300">{DEMO_DEPOSIT_ADDRESS}</div>
                     </div>
                     <button
                         onClick={handleCopyAddress}
-                        className="shrink-0 p-2 rounded-lg border border-brand-border text-slate-400 hover:text-brand-accent hover:border-brand-accent/40 transition-colors"
+                        className="shrink-0 rounded-lg border border-brand-border p-2 text-slate-400 transition-colors hover:border-brand-accent/40 hover:text-brand-accent"
                     >
-                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </button>
+                </div>
+            </div>
+
+            <div className="space-y-4 rounded-xl border border-brand-border bg-brand-card p-5">
+                <div className="flex items-center gap-2 text-sm font-bold text-ash">
+                    <QrCode className="h-4 w-4 text-brand-accent" />
+                    Пополнить баланс
                 </div>
                 <p className="text-[11px] text-slate-500">
                     Демо-режим: реальный платёжный шлюз ещё не подключен. Введите сумму ниже, чтобы симулировать поступление средств на баланс.
                 </p>
 
-                <form onSubmit={handleDeposit} className="flex flex-col sm:flex-row gap-2">
+                <form onSubmit={handleDeposit} className="flex flex-col gap-2 sm:flex-row">
                     <input
                         type="number"
                         step="10"
@@ -121,14 +128,14 @@ export default function AdvertiserBillingPage({ advertiser, onBalanceChanged }) 
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         placeholder="Сумма ($)"
-                        className="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-accent font-mono"
+                        className="flex-1 rounded-lg border border-brand-border bg-brand-bg px-3.5 py-2.5 font-mono text-xs text-white focus:border-brand-accent focus:outline-none"
                     />
                     <button
                         type="submit"
                         disabled={depositing}
-                        className="flex items-center justify-center gap-2 bg-brand-accent hover:bg-brand-accentHover disabled:opacity-40 text-brand-bg font-bold text-xs px-4 py-2.5 rounded-xl transition-all whitespace-nowrap"
+                        className="flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand-accent px-4 py-2.5 text-xs font-bold text-brand-bg transition-colors hover:bg-brand-accentHover disabled:opacity-40"
                     >
-                        {depositing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        {depositing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                         {depositing ? 'Обработка...' : 'Пополнить'}
                     </button>
                 </form>
@@ -136,8 +143,8 @@ export default function AdvertiserBillingPage({ advertiser, onBalanceChanged }) 
                 {depositSuccess && <p className="text-[11px] text-brand-success">{depositSuccess}</p>}
             </div>
 
-            <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
-                <h3 className="text-sm font-bold text-white px-5 pt-5 pb-3">Выписка по счёту</h3>
+            <div className="overflow-hidden rounded-xl border border-brand-border bg-brand-card">
+                <h3 className="px-5 pb-3 pt-5 text-sm font-bold text-ash">Выписка по счёту</h3>
                 {ledger === null && <div className="px-5 pb-5 text-xs text-slate-500">Загрузка...</div>}
                 {ledger === undefined && (
                     <div className="px-5 pb-5 text-xs text-slate-500">Выписка пока недоступна.</div>
@@ -146,63 +153,87 @@ export default function AdvertiserBillingPage({ advertiser, onBalanceChanged }) 
                     <div className="px-5 pb-5 text-xs text-slate-500">Проводок пока не было.</div>
                 )}
                 {Array.isArray(ledger) && ledger.length > 0 && (
-                    <div className="divide-y divide-brand-border">
-                        {ledger.map((entry) => {
-                            const typeKey = entry.type || entry.entryType;
-                            const typeLabel = LEDGER_TYPE_LABELS[typeKey] || typeKey;
-                            const isPositive = Number(entry.amount) >= 0;
-                            return (
-                                <div key={entry.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <div className="text-xs text-slate-200 font-semibold">{typeLabel}</div>
-                                        {entry.offerTitle && (
-                                            <div className="text-[11px] text-slate-400 mt-0.5 truncate">{entry.offerTitle}</div>
-                                        )}
-                                        {entry.sourceUrl && (
-                                            <a
-                                                href={entry.sourceUrl}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="text-[10px] text-brand-accent hover:underline flex items-center gap-1 font-mono mt-1"
-                                            >
-                                                {entry.platformCode && <span className="uppercase">{entry.platformCode}</span>}
-                                                <ExternalLink className="w-2.5 h-2.5" />
-                                            </a>
-                                        )}
-                                        {entry.recordedViews != null && (
-                                            <span className="text-[10px] text-slate-500 flex items-center gap-1 font-mono mt-1">
-                                                <Eye className="w-2.5 h-2.5" />
-                                                {Number(entry.recordedViews).toLocaleString()}
-                                            </span>
-                                        )}
-                                        <div className="text-[10px] text-slate-600 font-mono mt-1">
-                                            {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ''}
-                                        </div>
-                                    </div>
-                                    <div className={`shrink-0 text-xs font-mono font-bold px-2 py-1 rounded-lg border ${
-                                        isPositive
-                                            ? 'text-brand-success bg-brand-success/10 border-brand-success/20'
-                                            : 'text-brand-danger bg-brand-danger/10 border-brand-danger/20'
-                                    }`}>
-                                        {isPositive ? '+' : ''}${Number(entry.amount).toFixed(2)}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[700px] border-collapse text-left">
+                            <thead>
+                                <tr className="border-b border-brand-border">
+                                    <th className={TABLE_HEAD_CLASS}>Операция</th>
+                                    <th className={TABLE_HEAD_CLASS}>Дата</th>
+                                    <th className={`${TABLE_HEAD_CLASS} text-right`}>Просмотры</th>
+                                    <th className={`${TABLE_HEAD_CLASS} text-right`}>Сумма</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-brand-border">
+                                {ledger.map((entry) => {
+                                    const typeKey = entry.type || entry.entryType;
+                                    const typeLabel = LEDGER_TYPE_LABELS[typeKey] || typeKey;
+                                    const isPositive = Number(entry.amount) >= 0;
+                                    return (
+                                        <tr key={entry.id} className="transition-colors hover:bg-brand-cardHover/60">
+                                            <td className="px-4 py-3 align-top">
+                                                <div className="text-xs font-semibold text-slate-200">{typeLabel}</div>
+                                                {entry.offerTitle && (
+                                                    <div className="mt-0.5 truncate text-[11px] text-slate-400">{entry.offerTitle}</div>
+                                                )}
+                                                {entry.sourceUrl && (
+                                                    <a
+                                                        href={entry.sourceUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="mt-1 flex items-center gap-1 font-mono text-[10px] text-brand-accent hover:underline"
+                                                    >
+                                                        {entry.platformCode && <span className="uppercase">{entry.platformCode}</span>}
+                                                        <ExternalLink className="h-2.5 w-2.5" />
+                                                    </a>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3 align-top">
+                                                <div className="whitespace-nowrap font-mono text-[11px] text-slate-500">
+                                                    {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : '—'}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-right align-top">
+                                                {entry.recordedViews != null ? (
+                                                    <span className="inline-flex items-center justify-end gap-1 whitespace-nowrap font-mono text-[11px] text-slate-500">
+                                                        <Eye className="h-2.5 w-2.5" />
+                                                        {Number(entry.recordedViews).toLocaleString()}
+                                                    </span>
+                                                ) : (
+                                                    <span className="font-mono text-[11px] text-slate-700">—</span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3 text-right align-top">
+                                                <span
+                                                    className={`inline-flex whitespace-nowrap rounded-lg border px-2 py-1 font-mono text-xs font-bold ${
+                                                        isPositive
+                                                            ? 'border-brand-success/20 bg-brand-success/10 text-brand-success'
+                                                            : 'border-brand-danger/20 bg-brand-danger/10 text-brand-danger'
+                                                    }`}
+                                                >
+                                                    {isPositive ? '+' : ''}${Number(entry.amount).toFixed(2)}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {ledgerPage && (
+                    <div className="border-t border-brand-border px-2">
+                        <Pagination
+                            currentPage={ledgerPage.pageNumber}
+                            totalPages={ledgerPage.totalPages}
+                            totalElements={ledgerPage.totalElements}
+                            pageSize={ledgerPageSize}
+                            onPageChange={setLedgerPageNum}
+                            onPageSizeChange={(size) => { setLedgerPageSize(size); setLedgerPageNum(0); }}
+                        />
                     </div>
                 )}
             </div>
-
-            {ledgerPage && (
-                <Pagination
-                    currentPage={ledgerPage.pageNumber}
-                    totalPages={ledgerPage.totalPages}
-                    totalElements={ledgerPage.totalElements}
-                    pageSize={ledgerPageSize}
-                    onPageChange={setLedgerPageNum}
-                    onPageSizeChange={(size) => { setLedgerPageSize(size); setLedgerPageNum(0); }}
-                />
-            )}
         </div>
     );
 }

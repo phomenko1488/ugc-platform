@@ -16,15 +16,23 @@ import { api } from '../../api';
 /**
  * Isolated Advertiser Cabinet module shell — mounted by App.jsx whenever the active role is
  * ROLE_ADVERTISER, standalone like WorkerLayout is for ROLE_WORKER rather than nesting inside the
- * shared Header/main shell used by Moderator. Owns page switching (sidebar tabs, no react-router
- * — same state-based pattern as the rest of the app) plus the campaign-detail drill-down and the
- * offer creation wizard, both layered on top of the tab switch rather than being separate tabs.
+ * shared Header/main shell used by Moderator. Owns the campaign-detail drill-down and the offer
+ * creation wizard, both layered on top of the tab switch rather than being separate tabs.
+ *
+ * Tab switching is route-driven when App.jsx passes `activeTabOverride`/`onNavigateTab` (each tab
+ * then has a real URL — /dashboard, /campaigns, etc. — so it's bookmarkable and protected by the
+ * app's auth route); those two props are optional and fall back to plain internal state, so this
+ * component still works exactly as before if mounted without a router around it.
  *
  * The dashboard summary (balances, KPIs) is fetched once here and shared with both AdvertiserHeader
  * (Available/В офферах balances) and AdvertiserDashboardPage, instead of each fetching it separately.
  */
-export default function AdvertiserLayout({ advertiser, onRefresh, onLogout }) {
-    const [activePage, setActivePage] = useState('dashboard');
+export default function AdvertiserLayout({ advertiser, onRefresh, onLogout, activeTabOverride, onNavigateTab }) {
+    const [internalActivePage, setInternalActivePage] = useState('dashboard');
+    const isRouted = activeTabOverride != null && onNavigateTab != null;
+    const activePage = isRouted ? activeTabOverride : internalActivePage;
+    const goToTab = (page) => (isRouted ? onNavigateTab(page) : setInternalActivePage(page));
+
     const [selectedOfferId, setSelectedOfferId] = useState(null);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [wizardOpen, setWizardOpen] = useState(false);
@@ -54,7 +62,7 @@ export default function AdvertiserLayout({ advertiser, onRefresh, onLogout }) {
 
     const handleChangePage = (page) => {
         setSelectedOfferId(null);
-        setActivePage(page);
+        goToTab(page);
         setSidebarOpen(false);
     };
 
@@ -88,7 +96,7 @@ export default function AdvertiserLayout({ advertiser, onRefresh, onLogout }) {
 
                 <TelegramLinkBanner user={advertiser} />
 
-                <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
+                <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 sm:px-6 lg:px-8">
                     {selectedOfferId ? (
                         <AdvertiserCampaignDetailPage
                             advertiser={advertiser}
@@ -147,7 +155,7 @@ export default function AdvertiserLayout({ advertiser, onRefresh, onLogout }) {
                     onCreated={() => {
                         setWizardOpen(false);
                         handleDataChanged();
-                        setActivePage('campaigns');
+                        goToTab('campaigns');
                     }}
                 />
             )}

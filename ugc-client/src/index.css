@@ -2,10 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* "Slate & Raw Terracotta" base — kept in sync with tailwind.config.js's brand.* tokens
+   (bg #0d0e11, ash #b8bcc4) rather than the old warm-black/brass values from an earlier pass. */
 body {
   margin: 0;
-  background-color: #0c0b09;
-  color: #f1eee6;
+  background-color: #0d0e11;
+  color: #b8bcc4;
   font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -15,14 +17,14 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0c0b09;
+  background: #0d0e11;
 }
 ::-webkit-scrollbar-thumb {
-  background: #332c1e;
+  background: #2e333d;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #c9a227;
+  background: #e05a33;
 }
 
 /* Selika landing signature element — "the ledger tape": a continuously scrolling strip of

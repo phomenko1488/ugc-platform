@@ -3,6 +3,7 @@ import { Loader2, Clock, RotateCw, CheckCircle2, XCircle, ExternalLink, Send, X 
 import { api } from '../../../api';
 import PayoutProcessModal from '../components/PayoutProcessModal';
 import Pagination from '../../../components/Pagination';
+import { maskHash, maskWallet } from '../../../utils/mask';
 
 const STATUS_TABS = [
     { key: null, label: 'Все' },
@@ -14,10 +15,12 @@ const STATUS_TABS = [
 
 const STATUS_META = {
     PENDING: { label: 'PENDING', className: 'text-slate-400 bg-slate-500/10 border-slate-500/20', icon: Clock },
-    PROCESSING: { label: 'PROCESSING', className: 'text-sky-400 bg-sky-500/10 border-sky-500/20', icon: RotateCw },
+    PROCESSING: { label: 'PROCESSING', className: 'text-brand-info bg-brand-info/10 border-brand-info/20', icon: RotateCw },
     COMPLETED: { label: 'COMPLETED', className: 'text-brand-success bg-brand-success/10 border-brand-success/20', icon: CheckCircle2 },
     REJECTED: { label: 'REJECTED', className: 'text-brand-danger bg-brand-danger/10 border-brand-danger/20', icon: XCircle },
 };
+
+const TABLE_HEAD_CLASS = 'px-4 py-3 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500';
 
 export default function AdminPayoutsPage({ onDataChanged }) {
     const [statusTab, setStatusTab] = useState(null);
@@ -104,87 +107,128 @@ export default function AdminPayoutsPage({ onDataChanged }) {
                     Заявок не найдено.
                 </div>
             ) : (
-                <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden divide-y divide-brand-border">
-                    {payouts.map((p) => {
-                        const meta = STATUS_META[p.status] || STATUS_META.PENDING;
-                        const StatusIcon = meta.icon;
-                        const isBusy = busyId === p.id;
-                        return (
-                            <div key={p.id} className="p-4">
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <div className="text-xs font-bold text-white">{p.username || `#${p.userId}`}</div>
-                                        <div className="text-[10px] text-slate-500 font-mono truncate max-w-[220px]">{p.trc20Wallet}</div>
-                                        <div className="text-[10px] text-slate-600 font-mono mt-0.5">
-                                            {p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}
-                                        </div>
-                                    </div>
-                                    <div className="text-base font-bold font-mono text-white">${Number(p.amount).toFixed(2)}</div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <span className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg font-bold border uppercase ${meta.className}`}>
-                                            <StatusIcon className="w-3 h-3" />
-                                            {meta.label}
-                                        </span>
-                                        {p.txHash && (
-                                            <a
-                                                href={`https://tronscan.org/#/transaction/${p.txHash}`}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="text-[11px] text-brand-accent hover:underline flex items-center gap-1 font-mono"
-                                            >
-                                                Tx <ExternalLink className="w-3 h-3" />
-                                            </a>
-                                        )}
-                                        {p.status === 'PENDING' && (
-                                            <button
-                                                onClick={() => handleProcess(p)}
-                                                disabled={isBusy}
-                                                className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/30 hover:bg-sky-500/20 disabled:opacity-40"
-                                            >
-                                                В обработку
-                                            </button>
-                                        )}
-                                        {(p.status === 'PENDING' || p.status === 'PROCESSING') && (
-                                            <>
-                                                <button
-                                                    onClick={() => setCompletingPayout(p)}
-                                                    disabled={isBusy}
-                                                    className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-brand-success/10 text-brand-success border border-brand-success/30 hover:bg-brand-success/20 disabled:opacity-40"
+                <div className="overflow-x-auto rounded-xl border border-brand-border bg-brand-card">
+                    <table className="w-full min-w-[860px] border-collapse text-left">
+                        <thead>
+                            <tr className="border-b border-brand-border">
+                                <th className={TABLE_HEAD_CLASS}>Пользователь</th>
+                                <th className={TABLE_HEAD_CLASS}>Кошелёк</th>
+                                <th className={TABLE_HEAD_CLASS}>Создана</th>
+                                <th className={`${TABLE_HEAD_CLASS} text-right`}>Сумма</th>
+                                <th className={TABLE_HEAD_CLASS}>Статус</th>
+                                <th className={TABLE_HEAD_CLASS}>TxID</th>
+                                <th className={`${TABLE_HEAD_CLASS} text-right`}>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-brand-border">
+                            {payouts.map((p) => {
+                                const meta = STATUS_META[p.status] || STATUS_META.PENDING;
+                                const StatusIcon = meta.icon;
+                                const isBusy = busyId === p.id;
+                                return (
+                                    <React.Fragment key={p.id}>
+                                        <tr className="transition-colors hover:bg-brand-cardHover/60">
+                                            <td className="px-4 py-3 align-top">
+                                                <div className="text-xs font-bold text-ash">{p.username || `#${p.userId}`}</div>
+                                            </td>
+                                            <td className="px-4 py-3 align-top">
+                                                <div
+                                                    title="Адрес кошелька замаскирован"
+                                                    className="whitespace-nowrap font-mono text-[11px] text-slate-400"
                                                 >
-                                                    <Send className="w-3 h-3" /> Выплатить
-                                                </button>
-                                                <button
-                                                    onClick={() => setRejectingId(rejectingId === p.id ? null : p.id)}
-                                                    disabled={isBusy}
-                                                    className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-brand-danger/10 text-brand-danger border border-brand-danger/30 hover:bg-brand-danger/20 disabled:opacity-40"
-                                                >
-                                                    <X className="w-3 h-3" /> Отклонить
-                                                </button>
-                                            </>
+                                                    {maskWallet(p.trc20Wallet)}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 align-top">
+                                                <div className="whitespace-nowrap font-mono text-[11px] text-slate-500">
+                                                    {p.createdAt ? new Date(p.createdAt).toLocaleString() : '—'}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-right align-top">
+                                                <div className="whitespace-nowrap font-mono text-sm font-bold text-ash">
+                                                    ${Number(p.amount).toFixed(2)}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 align-top">
+                                                <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1 text-[10px] font-bold uppercase ${meta.className}`}>
+                                                    <StatusIcon className="w-3 h-3" />
+                                                    {meta.label}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 align-top">
+                                                {p.txHash ? (
+                                                    <a
+                                                        href={`https://tronscan.org/#/transaction/${p.txHash}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        title="Хэш транзакции замаскирован — полный адрес открывается по ссылке"
+                                                        className="inline-flex items-center gap-1 whitespace-nowrap font-mono text-[11px] text-brand-accent hover:underline"
+                                                    >
+                                                        {maskHash(p.txHash)}
+                                                        <ExternalLink className="w-3 h-3" />
+                                                    </a>
+                                                ) : (
+                                                    <span className="font-mono text-[11px] text-slate-600">—</span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3 text-right align-top">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {p.status === 'PENDING' && (
+                                                        <button
+                                                            onClick={() => handleProcess(p)}
+                                                            disabled={isBusy}
+                                                            className="whitespace-nowrap text-[11px] font-bold px-3 py-1.5 rounded-lg bg-brand-info/10 text-brand-info border border-brand-info/30 hover:bg-brand-info/20 disabled:opacity-40"
+                                                        >
+                                                            В обработку
+                                                        </button>
+                                                    )}
+                                                    {(p.status === 'PENDING' || p.status === 'PROCESSING') && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => setCompletingPayout(p)}
+                                                                disabled={isBusy}
+                                                                className="flex items-center gap-1 whitespace-nowrap text-[11px] font-bold px-3 py-1.5 rounded-lg bg-brand-success/10 text-brand-success border border-brand-success/30 hover:bg-brand-success/20 disabled:opacity-40"
+                                                            >
+                                                                <Send className="w-3 h-3" /> Выплатить
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setRejectingId(rejectingId === p.id ? null : p.id)}
+                                                                disabled={isBusy}
+                                                                className="flex items-center gap-1 whitespace-nowrap text-[11px] font-bold px-3 py-1.5 rounded-lg bg-brand-danger/10 text-brand-danger border border-brand-danger/30 hover:bg-brand-danger/20 disabled:opacity-40"
+                                                            >
+                                                                <X className="w-3 h-3" /> Отклонить
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {rejectingId === p.id && (
+                                            <tr>
+                                                <td colSpan={7} className="bg-brand-bg/60 px-4 py-3">
+                                                    <div className="flex flex-col gap-2 rounded-xl border border-brand-border bg-brand-bg p-3 sm:flex-row">
+                                                        <input
+                                                            type="text"
+                                                            value={rejectReason}
+                                                            onChange={(e) => setRejectReason(e.target.value)}
+                                                            className="flex-1 rounded-lg border border-brand-border bg-brand-card px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-accent"
+                                                        />
+                                                        <button
+                                                            onClick={() => handleReject(p.id)}
+                                                            disabled={isBusy}
+                                                            className="whitespace-nowrap rounded-lg bg-brand-danger px-4 py-2 text-xs font-bold text-white hover:bg-brand-danger/85 disabled:opacity-40"
+                                                        >
+                                                            {isBusy ? 'Отклонение...' : 'Отклонить и вернуть на баланс'}
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
                                         )}
-                                    </div>
-                                </div>
-
-                                {rejectingId === p.id && (
-                                    <div className="mt-3 flex flex-col sm:flex-row gap-2 bg-brand-bg border border-brand-border rounded-xl p-3">
-                                        <input
-                                            type="text"
-                                            value={rejectReason}
-                                            onChange={(e) => setRejectReason(e.target.value)}
-                                            className="flex-1 bg-brand-card border border-brand-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-accent"
-                                        />
-                                        <button
-                                            onClick={() => handleReject(p.id)}
-                                            disabled={isBusy}
-                                            className="bg-brand-danger hover:bg-rose-600 disabled:opacity-40 text-white font-bold text-xs px-4 py-2 rounded-lg whitespace-nowrap"
-                                        >
-                                            {isBusy ? 'Отклонение...' : 'Отклонить и вернуть на баланс'}
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
+                                    </React.Fragment>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
             )}
 

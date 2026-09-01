@@ -18,7 +18,7 @@ const STATUS_TABS = [
 
 const STATUS_META = {
     TRACKING: { label: 'В холде', className: 'bg-brand-warning/10 text-brand-warning border-brand-warning/20', icon: Hourglass },
-    PENDING_REVIEW: { label: 'На проверке', className: 'bg-sky-500/10 text-sky-400 border-sky-500/20', icon: Clock },
+    PENDING_REVIEW: { label: 'На проверке', className: 'bg-brand-info/10 text-brand-info border-brand-info/20', icon: Clock },
     APPROVED: { label: 'Одобрено', className: 'bg-brand-success/10 text-brand-success border-brand-success/20', icon: ThumbsUp },
     REJECTED: { label: 'Отклонено', className: 'bg-brand-danger/10 text-brand-danger border-brand-danger/20', icon: XCircle },
     DISPUTED: { label: 'Оспорено', className: 'bg-brand-danger/10 text-brand-danger border-brand-danger/20', icon: ShieldAlert },

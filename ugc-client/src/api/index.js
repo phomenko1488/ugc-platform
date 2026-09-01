@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:80/api/v1';
+const API_BASE = '/api/v1';
 
 const ACCESS_TOKEN_KEY = 'ugc_access_token';
 const REFRESH_TOKEN_KEY = 'ugc_refresh_token';

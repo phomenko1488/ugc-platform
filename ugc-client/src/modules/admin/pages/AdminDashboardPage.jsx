@@ -87,7 +87,7 @@ export default function AdminDashboardPage({ dashboard, loading, error }) {
                     icon={TrendingUp}
                     label="Валовый оборот"
                     value={`$${Number(dashboard.platformGrossTurnover).toFixed(2)}`}
-                    accent="text-sky-400"
+                    accent="text-brand-info"
                 />
                 <KpiCard
                     icon={Landmark}
@@ -130,7 +130,7 @@ export default function AdminDashboardPage({ dashboard, loading, error }) {
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-bold text-white">Динамика платформы (30 дней)</h3>
                     <div className="flex items-center gap-3 text-[10px] text-slate-400">
-                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-400 inline-block" /> Оборот</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-brand-info inline-block" /> Оборот</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-brand-success inline-block" /> Прибыль</span>
                     </div>
                 </div>

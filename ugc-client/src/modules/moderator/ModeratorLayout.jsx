@@ -178,7 +178,7 @@ export default function ModeratorLayout({moderator, onLogout}) {
                                                 className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase shrink-0 ${
                                                     isDisputed
                                                         ? 'bg-brand-danger/10 text-brand-danger border-brand-danger/20'
-                                                        : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                                                        : 'bg-brand-info/10 text-brand-info border-brand-info/20'
                                                 }`}>
                                                 {isDisputed ? '⚠️ СПОР' : 'ПРОВЕРКА'}
                                             </span>
@@ -307,7 +307,7 @@ export default function ModeratorLayout({moderator, onLogout}) {
                                         <button
                                             onClick={() => handleApprove(activeItem.id)}
                                             disabled={actionLoading}
-                                            className="bg-brand-success hover:bg-emerald-600 disabled:opacity-40 text-brand-bg font-bold text-xs py-3 rounded-xl transition-all shadow-lg shadow-brand-success/10 flex items-center justify-center gap-2"
+                                            className="bg-brand-success hover:bg-brand-success/85 disabled:opacity-40 text-brand-bg font-bold text-xs py-3 rounded-xl transition-all shadow-lg shadow-brand-success/10 flex items-center justify-center gap-2"
                                         >
                                             {actionLoading ? <Loader2 className="w-4 h-4 animate-spin"/> :
                                                 <CheckCircle2 className="w-4 h-4"/>}
@@ -318,7 +318,7 @@ export default function ModeratorLayout({moderator, onLogout}) {
                                         <button
                                             onClick={() => handleReject(activeItem.id)}
                                             disabled={actionLoading}
-                                            className="bg-brand-danger hover:bg-rose-600 disabled:opacity-40 text-white font-bold text-xs py-3 rounded-xl transition-all shadow-lg shadow-brand-danger/10 flex items-center justify-center gap-2"
+                                            className="bg-brand-danger hover:bg-brand-danger/85 disabled:opacity-40 text-white font-bold text-xs py-3 rounded-xl transition-all shadow-lg shadow-brand-danger/10 flex items-center justify-center gap-2"
                                         >
                                             {actionLoading ? <Loader2 className="w-4 h-4 animate-spin"/> :
                                                 <XCircle className="w-4 h-4"/>}

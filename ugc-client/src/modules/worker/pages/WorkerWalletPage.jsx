@@ -15,7 +15,7 @@ const MIN_PAYOUT = 20;
 
 const PAYOUT_STATUS_META = {
     PENDING: { label: 'В очереди', className: 'text-slate-400 bg-slate-500/10 border-slate-500/20', icon: Clock },
-    PROCESSING: { label: 'В обработке', className: 'text-sky-400 bg-sky-500/10 border-sky-500/20', icon: Loader2 },
+    PROCESSING: { label: 'В обработке', className: 'text-brand-info bg-brand-info/10 border-brand-info/20', icon: Loader2 },
     COMPLETED: { label: 'Выполнено', className: 'text-brand-success bg-brand-success/10 border-brand-success/20', icon: CheckCircle2 },
     REJECTED: { label: 'Отклонено', className: 'text-brand-danger bg-brand-danger/10 border-brand-danger/20', icon: XCircle },
 };

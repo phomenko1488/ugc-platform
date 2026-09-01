@@ -85,8 +85,8 @@ function TrendsChart({ points }) {
                 <path d={spendLine} fill="none" stroke="#34d399" strokeWidth="1.75" strokeDasharray="4 3" strokeLinejoin="round" strokeLinecap="round" />
             </svg>
             <div className="flex items-center gap-4 mt-2 text-[10px] text-slate-500">
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-1 rounded-full bg-sky-400 inline-block" /> Просмотры</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-1 rounded-full bg-emerald-400 inline-block" /> Расход, $</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-1 rounded-full bg-brand-info inline-block" /> Просмотры</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-1 rounded-full bg-brand-success inline-block" /> Расход, $</span>
             </div>
         </div>
     );
@@ -107,8 +107,12 @@ function ShareBar({ label, sublabel, views, sharePercentage, colorClass }) {
     );
 }
 
-const PLATFORM_COLORS = ['bg-sky-400', 'bg-fuchsia-400', 'bg-amber-400', 'bg-emerald-400'];
-const GEO_COLORS = ['bg-brand-accent', 'bg-indigo-400', 'bg-rose-400', 'bg-teal-400'];
+// Four platform categories need four genuinely distinguishable hues (a single accent can't
+// carry a multi-series legend) — retinted from the stock sky/fuchsia/amber/emerald swatches
+// to hues that actually sit inside the Slate & Raw Terracotta system: terracotta accent,
+// slate-info, ochre warning, and sage success.
+const PLATFORM_COLORS = ['bg-brand-accent', 'bg-brand-info', 'bg-brand-warning', 'bg-brand-success'];
+const GEO_COLORS = ['bg-brand-accent', 'bg-brand-info', 'bg-brand-danger', 'bg-brand-success'];
 
 export default function AdvertiserAnalyticsPage({ advertiser }) {
     const [preset, setPreset] = useState('30d');

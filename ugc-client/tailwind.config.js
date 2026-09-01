@@ -19,7 +19,13 @@ export default {
                     accentHover: '#f06c45', // Яркий терракотовый ховер
                     success: '#3b8a61',     // Сложный приглушенный изумрудно-травяной
                     warning: '#d99b36',     // Архитектурный охровый для статусов
-                    danger: '#cf4646'       // Плотный глиняный красный для ошибок
+                    danger: '#cf4646',      // Плотный глиняный красный для ошибок
+                    // The palette's own name promises a "Slate" half alongside the terracotta —
+                    // this is where it actually shows up: a dusty steel-blue for informational/
+                    // in-progress states, replacing the generic Tailwind `sky-*` swatches those
+                    // states borrowed before this token existed (a cool default, not a choice).
+                    info: '#5b7fa3',
+                    infoHover: '#6f95bb',
                 },
                 ash: '#b8bcc4',             // Чистый серебристо-платиновый текст для высокой четкости
             },

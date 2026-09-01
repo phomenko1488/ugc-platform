@@ -166,7 +166,7 @@ export default function ModeratorCabinet({ queue, onRefresh }) {
                                     <button
                                         onClick={() => handleApprove(activeItem.id)}
                                         disabled={actionLoading}
-                                        className="bg-brand-success hover:bg-emerald-600 text-brand-bg font-bold text-xs py-3 rounded-xl transition-all shadow-lg shadow-brand-success/10 flex items-center justify-center gap-2"
+                                        className="bg-brand-success hover:bg-brand-success/85 text-brand-bg font-bold text-xs py-3 rounded-xl transition-all shadow-lg shadow-brand-success/10 flex items-center justify-center gap-2"
                                     >
                                         <CheckCircle2 className="w-4 h-4" />
                                         Одобрить выплату
@@ -175,7 +175,7 @@ export default function ModeratorCabinet({ queue, onRefresh }) {
                                     <button
                                         onClick={() => handleReject(activeItem.id)}
                                         disabled={actionLoading}
-                                        className="bg-brand-danger hover:bg-rose-600 text-white font-bold text-xs py-3 rounded-xl transition-all shadow-lg shadow-brand-danger/10 flex items-center justify-center gap-2"
+                                        className="bg-brand-danger hover:bg-brand-danger/85 text-white font-bold text-xs py-3 rounded-xl transition-all shadow-lg shadow-brand-danger/10 flex items-center justify-center gap-2"
                                     >
                                         <XCircle className="w-4 h-4" />
                                         Отклонить

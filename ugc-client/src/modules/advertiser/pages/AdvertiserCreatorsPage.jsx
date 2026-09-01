@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, Search, Users, Eye, Wallet2, Clock, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { api } from '../../../api';
 import Pagination from '../../../components/Pagination';
+import { maskHandle } from '../../../utils/mask';
 
 // No dedicated "creators roster" endpoint exists on the backend yet, so this page builds one
 // client-side from the same Traffic Inspector data AdvertiserTrafficPage already fetches
@@ -121,10 +122,10 @@ export default function AdvertiserCreatorsPage({ advertiser }) {
         <div className="space-y-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-lg font-bold text-white">Криэйторы</h1>
+                    <h1 className="font-display text-2xl uppercase tracking-tight text-ash">Криэйторы</h1>
                     <p className="mt-1 text-xs text-slate-500">
-                        Все авторы контента, приносившие трафик по вашим кампаниям — {creators.length}{' '}
-                        {creators.length === 1 ? 'криэйтор' : 'криэйторов'}.
+                        Все авторы контента, приносившие трафик по вашим потокам — {creators.length}{' '}
+                        {creators.length === 1 ? 'криэйтор' : 'криэйторов'}. Ники замаскированы для приватности.
                     </p>
                 </div>
                 <div className="relative w-full sm:w-64">
@@ -166,7 +167,7 @@ export default function AdvertiserCreatorsPage({ advertiser }) {
                                     return (
                                         <tr key={c.workerId} className="border-b border-brand-border/60 last:border-0 hover:bg-white/[0.02]">
                                             <td className="px-4 py-3">
-                                                <div className="font-semibold text-slate-200">{c.label}</div>
+                                                <div className="font-mono font-semibold text-slate-200">{maskHandle(c.label)}</div>
                                                 <div className="text-[10px] text-slate-600">ID: {c.workerId}</div>
                                             </td>
                                             <td className="px-4 py-3">

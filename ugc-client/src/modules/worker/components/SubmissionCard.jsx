@@ -6,7 +6,7 @@ import { ExternalLink, Clock, XCircle, ThumbsUp, Hourglass, ShieldAlert } from '
 // -> APPROVED (hold expired without a dispute, or a dispute was resolved in the worker's favor —
 // either way HoldSettlementScheduler/SubmissionServiceImpl already paid it out, hence "Выплачено").
 const STATUS_META = {
-    PENDING_REVIEW: { label: 'На проверке платформой', className: 'bg-sky-500/10 text-sky-400 border-sky-500/20', icon: Clock },
+    PENDING_REVIEW: { label: 'На проверке платформой', className: 'bg-brand-info/10 text-brand-info border-brand-info/20', icon: Clock },
     TRACKING: { label: 'В холде (проверка рекламодателем)', className: 'bg-brand-warning/10 text-brand-warning border-brand-warning/20', icon: Hourglass },
     APPROVED: { label: 'Выплачено', className: 'bg-brand-success/10 text-brand-success border-brand-success/20', icon: ThumbsUp },
     REJECTED: { label: 'Отклонено', className: 'bg-brand-danger/10 text-brand-danger border-brand-danger/20', icon: XCircle },
