@@ -5,7 +5,7 @@ import WebApp from '@twa-dev/sdk';
 
 // TODO: replace with the real bot username once it's known — this delivery only received the
 // bot token, not its @username, so the referral link can't be generated for real yet.
-const BOT_USERNAME = 'ugc_flow_bot';
+const BOT_USERNAME = 'selika_bot';
 
 function triggerHaptic() {
     try {

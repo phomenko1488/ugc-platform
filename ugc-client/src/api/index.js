@@ -1,4 +1,4 @@
-const API_BASE = '/api/v1';
+const API_BASE = 'http://localhost:80/api/v1';
 
 const ACCESS_TOKEN_KEY = 'ugc_access_token';
 const REFRESH_TOKEN_KEY = 'ugc_refresh_token';
@@ -225,6 +225,22 @@ export const api = {
         body: JSON.stringify({ amount }),
     }),
 
+    // --- Advertiser Cabinet: "API и Интеграции" (token management + postback URL) ---
+    getAdvertiserIntegrations: (advertiserId) => request(`/advertiser/${advertiserId}/integrations`),
+    // Response carries the plaintext token exactly once — the caller must show/copy it
+    // immediately, every later fetch of the token list only ever returns a masked preview.
+    generateAdvertiserApiToken: (advertiserId, label) => request(`/advertiser/${advertiserId}/integrations/tokens`, {
+        method: 'POST',
+        body: JSON.stringify({ label }),
+    }),
+    revokeAdvertiserApiToken: (advertiserId, tokenId) => request(`/advertiser/${advertiserId}/integrations/tokens/${tokenId}`, {
+        method: 'DELETE',
+    }),
+    updateAdvertiserPostbackUrl: (advertiserId, postbackUrl) => request(`/advertiser/${advertiserId}/integrations/postback-url`, {
+        method: 'PUT',
+        body: JSON.stringify({ postbackUrl }),
+    }),
+
     // --- B2B Partner Cabinet ---
     getPartnerDashboard: (partnerId) => request('/partner/' + partnerId + '/dashboard'),
     getPartnerAdvertisers: (partnerId, search = '', page = 0, size = 10) => request(
@@ -292,7 +308,6 @@ export const api = {
     }),
     toggleGeo: (id) => request(`/admin/reference/geos/${id}/toggle`, { method: 'PUT' }),
     updatePlatformMargin: (margin) => request(`/admin/settings/margin?margin=${margin}`, { method: 'PUT' }),
-    getMe: () => request('/users/me'),
 };
 
 // Uses XHR instead of fetch so we can report real upload progress to the FileUploader component.

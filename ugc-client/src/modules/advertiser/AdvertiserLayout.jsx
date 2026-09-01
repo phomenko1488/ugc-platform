@@ -8,6 +8,8 @@ import AdvertiserCampaignsPage from './pages/AdvertiserCampaignsPage';
 import AdvertiserCampaignDetailPage from './pages/AdvertiserCampaignDetailPage';
 import AdvertiserTrafficPage from './pages/AdvertiserTrafficPage';
 import AdvertiserBillingPage from './pages/AdvertiserBillingPage';
+import AdvertiserCreatorsPage from './pages/AdvertiserCreatorsPage';
+import AdvertiserApiPage from './pages/AdvertiserApiPage';
 import TelegramLinkBanner from '../../components/TelegramLinkBanner';
 import { api } from '../../api';
 
@@ -126,6 +128,12 @@ export default function AdvertiserLayout({ advertiser, onRefresh, onLogout }) {
                                     advertiser={advertiser}
                                     onBalanceChanged={handleDataChanged}
                                 />
+                            )}
+                            {activePage === 'creators' && (
+                                <AdvertiserCreatorsPage advertiser={advertiser} />
+                            )}
+                            {activePage === 'api' && (
+                                <AdvertiserApiPage advertiser={advertiser} />
                             )}
                         </>
                     )}

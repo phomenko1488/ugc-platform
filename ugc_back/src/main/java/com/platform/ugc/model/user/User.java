@@ -81,6 +81,13 @@ public class User implements UserDetails {
     @Column(length = 42)
     private String trc20Wallet;
 
+    // Advertiser Cabinet -> "API и Интеграции": where the platform POSTs conversion/payout
+    // events for this advertiser's own postback pipeline (their casino's tracker). Nullable —
+    // most non-advertiser roles never set it, and an advertiser only needs one at a time, so a
+    // single column is simpler than a child table for what is, in practice, a 1:1 setting.
+    @Column(length = 512)
+    private String postbackUrl;
+
     @Column(nullable = false)
     @Builder.Default
     private Integer trustLevel = 1;

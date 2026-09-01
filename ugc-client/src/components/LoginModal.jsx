@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogIn, Loader2, Video, UserPlus, KeyRound, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { LogIn, Loader2, Workflow, UserPlus, KeyRound, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { api, authStorage } from '../api';
 
 const TABS = [
@@ -14,19 +14,33 @@ const TABS = [
  * forgot/reset-password flow (one-time-token based, sent by email — see EmailService).
  * Workers authenticate automatically via Telegram WebApp — see App.jsx's useTelegramAuth effect,
  * this modal never shows up inside an actual Telegram Mini App session.
+ *
+ * `onBack` is optional — App.jsx passes it now that anonymous visitors land on LandingPage first,
+ * so this modal needs a way back to it; omitting the prop just hides the link (e.g. if some other
+ * caller wants this as the sole anonymous-state screen again).
  */
-export default function LoginModal({ onAuthenticated }) {
+export default function LoginModal({ onAuthenticated, onBack }) {
     const [tab, setTab] = useState('LOGIN');
 
     return (
-        <div className="min-h-screen bg-[#090d16] flex items-center justify-center p-4">
+        <div className="min-h-screen bg-brand-bg flex items-center justify-center p-4">
             <div className="bg-brand-card border border-brand-border p-8 rounded-2xl max-w-sm w-full shadow-xl space-y-6">
+                {onBack && (
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+                    >
+                        <ArrowLeft className="w-3 h-3" />
+                        На главную
+                    </button>
+                )}
                 <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-brand-accent/10 border border-brand-accent/30 flex items-center justify-center text-brand-accent">
-                        <Video className="w-5 h-5" />
+                        <Workflow className="w-5 h-5" />
                     </div>
                     <div>
-                        <div className="font-bold text-lg text-white">UGC Flow</div>
+                        <div className="font-bold text-lg text-white">Selika</div>
                         <div className="text-[11px] text-slate-400">Рекламодатель / Модератор / Партнер</div>
                     </div>
                 </div>

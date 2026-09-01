@@ -4,9 +4,9 @@
 
 body {
   margin: 0;
-  background-color: #090d16;
-  color: #f3f4f6;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #0c0b09;
+  color: #f1eee6;
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -15,12 +15,30 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #0c0b09;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1f293d;
+  background: #332c1e;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #38bdf8;
+  background: #c9a227;
+}
+
+/* Selika landing signature element — "the ledger tape": a continuously scrolling strip of
+   settlement rows. The track's content is rendered twice back-to-back by the component and
+   this animation slides it exactly -50%, so the loop point is invisible. Paused for anyone who
+   has asked their OS for reduced motion, per the reduced-motion floor every animated element on
+   this page must clear. */
+@keyframes ledger-tape-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-ledger-tape {
+  animation: ledger-tape-scroll 32s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-ledger-tape {
+    animation: none;
+  }
 }

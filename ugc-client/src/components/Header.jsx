@@ -11,8 +11,8 @@ export default function Header({ activeUser, onRefresh, activeRole, onChangeRole
                         <Video className="w-5 h-5" />
                     </div>
                     <div>
-                        <div className="font-bold text-lg leading-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-                            UGC Flow
+                        <div className="font-bold text-lg leading-tight text-white">
+                            Selika
                         </div>
                         <div className="text-[11px] text-slate-400 tracking-wide font-medium">VIEW ESCROW ENGINE</div>
                     </div>

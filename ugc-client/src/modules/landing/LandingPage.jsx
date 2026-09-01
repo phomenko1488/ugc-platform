@@ -1,87 +1,94 @@
-import React, { useMemo, useState } from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
-    Rocket,
+    Workflow,
     ArrowRight,
-    ArrowDown,
-    Video,
+    ArrowUpRight,
     Megaphone,
     Handshake,
-    Wallet,
+    Wallet2,
     ShieldCheck,
     Gauge,
     Eye,
-    DollarSign,
-    Sparkles,
-    TrendingUp,
-    Lock,
     Percent,
     BarChart3,
     Zap,
     Send,
     ChevronRight,
     CheckCircle2,
+    XCircle,
     Users,
-    Timer,
+    LayoutDashboard,
+    KeyRound,
+    Video,
+    Dices,
+    LogIn,
     Activity,
-    LifeBuoy,
+    Lock,
+    RefreshCcw,
+    Menu,
+    X,
+    Cpu,
+    Film,
+    PlaySquare,
+    Tv,
+    Share2,
+    Layers,
+    CheckSquare,
+    ShieldAlert,
+    HelpCircle,
+    ChevronDown,
 } from 'lucide-react';
 
-/**
- * UGC Flow — маркетинговый лендинг для новых пользователей.
- *
- * Полностью самостоятельный компонент: не импортирует и не зависит ни от одного модуля
- * существующего кабинета (App.jsx, api/index.js, LoginModal.jsx и т.д.) и ничего в них не меняет.
- * Использует только React + lucide-react + Tailwind (оба уже входят в зависимости ugc-client)
- * и фирменную палитру, уже объявленную в tailwind.config.js (brand-bg/card/border/accent/success).
- *
- * Встраивание: импортируйте и отрендерьте компонент там, где считаете нужным (например, как
- * отдельный публичный роут `/` до экрана логина/WebApp) — сам файл ничего не регистрирует и
- * ни на что не подписывается автоматически.
- *
- * Метрики в Hero-блоке и в блоке доверия — иллюстративные плейсхолдеры для демонстрации верстки;
- * перед запуском в прод замените их на реальные цифры платформы.
- */
-
 const TELEGRAM_BASE_URL = 'https://t.me/';
+const BRAND_NAME = 'Selika';
+const BRAND_DOMAIN = 'selika.net';
 
-// Иллюстративные CPM-ставки для калькулятора — согласованы с дефолтами визарда оффера в
-// кабинете рекламодателя (advertiserCpmRate по умолчанию $250 / 1M просмотров, маржа платформы
-// по умолчанию 25% => workerCpmRate ≈ $187.5 / 1M). Округлены для наглядности демонстрации.
-const CALCULATOR_RATES = {
-    worker: { cpmPerMillion: 180, label: 'Ваш потенциальный доход', unit: 'доход' },
-    advertiser: { cpmPerMillion: 250, label: 'Необходимый бюджет кампании', unit: 'бюджет' },
-    partner: { cpmPerMillion: 38, label: 'Ваш пассивный доход (RevShare)', unit: 'доход' },
-};
+const MARGIN_PERCENT = 25;
+const PARTNER_REVSHARE_PERCENT = 15;
 
-const AUDIENCES = [
+function ratesForCpm(advertiserCpm) {
+    return {
+        worker: {cpmPerMillion: advertiserCpm * (1 - MARGIN_PERCENT / 100), label: 'Доход криэйтора'},
+        advertiser: {cpmPerMillion: advertiserCpm, label: 'Бюджет кампании'},
+        partner: {cpmPerMillion: advertiserCpm * (PARTNER_REVSHARE_PERCENT / 100), label: 'Доход по RevShare'},
+    };
+}
+
+const NAV_ITEMS = [
+    {id: 'overview', label: 'Обзор'},
+    {id: 'problem', label: 'Проблема и решение'},
+    {id: 'roles', label: 'Роли'},
+    {id: 'calculator', label: 'Калькулятор'},
+    {id: 'telemetry', label: 'Видео-потоки'},
+    {id: 'lifecycle', label: 'Пайплайн'},
+    {id: 'inspector', label: 'Live-инспектор'},
+    {id: 'faq', label: 'FAQ'},
+];
+
+const ROLES = [
     {
         key: 'worker',
-        label: 'Авторам',
-        shortLabel: 'Воркер',
+        label: 'Криэйторам',
+        shortLabel: 'Криэйтор',
         icon: Video,
-        headline: 'Снимайте видео — получайте USDT',
+        headline: 'Ставка известна заранее — оплата приходит без переговоров',
         description:
-            'Берите готовые офферы брендов, заливайте ролики в TikTok, Reels и YouTube Shorts и получайте оплату за реальные просмотры — без портфолио и испытательного срока.',
+            'Берите готовые офферы, публикуйте ролики в TikTok, Reels и YouTube Shorts и получайте оплату за подтверждённые просмотры по ставке, зафиксированной ещё до старта.',
         points: [
             {
                 icon: Zap,
-                title: 'Низкий порог входа',
-                text: 'Начните за 2 минуты через Telegram — без резюме, кастинга и минимальных требований к подписчикам.',
-            },
-            {
-                icon: Video,
-                title: 'Залив в любой формат',
-                text: 'TikTok, Instagram Reels, YouTube Shorts — берите оффер под свою площадку и аудиторию.',
+                title: 'Старт за 2 минуты',
+                text: 'Регистрация через Telegram, без анкет и порогов входа по аудитории.'
             },
             {
                 icon: Gauge,
-                title: 'Прозрачный CPM',
-                text: 'Точная ставка за 1 000 000 просмотров видна ещё до того, как вы взяли оффер в работу.',
+                title: 'Фиксированный CPM',
+                text: 'Ставка за 1 000 000 просмотров зафиксирована в оффере — не меняется задним числом.'
             },
             {
-                icon: Wallet,
-                title: 'Мгновенные выплаты',
-                text: 'USDT в сети TRC-20 — без банков, конвертации и задержек в несколько дней.',
+                icon: Wallet2,
+                title: 'Крипто-выплаты',
+                text: 'USDT в сети TRC-20 — без банков, конвертации и ожидания в несколько дней.'
             },
         ],
     },
@@ -90,165 +97,292 @@ const AUDIENCES = [
         label: 'Рекламодателям',
         shortLabel: 'Рекламодатель',
         icon: Megaphone,
-        headline: 'Масштабируйте трафик без агентских наценок',
+        headline: 'Закупайте трафик, не теряя контроль над бюджетом',
         description:
-            'Запускайте офферы и получайте вирусный трафик от сети проверенных авторов — с полной прозрачностью по каждому просмотру и защитой бюджета от фрода.',
+            'Запускайте кампании и получайте трафик от сети проверенных криэйторов — с полной видимостью по каждому просмотру, лимитами на выплату и защитой от накрутки.',
         points: [
-            {
-                icon: TrendingUp,
-                title: 'Масштабирование трафика',
-                text: 'Сотни авторов заливают ролики параллельно — трафик растёт без ручного поиска блогеров.',
-            },
             {
                 icon: Eye,
                 title: 'Traffic Inspector',
-                text: 'Полная прозрачность по каждому ролику: воркер, платформа, динамика просмотров, статус холда.',
+                text: 'Автор, платформа, динамика просмотров, статус холда — по каждому ролику отдельно.'
             },
             {
                 icon: ShieldCheck,
-                title: 'Защита от фрода',
-                text: 'Двухуровневая модерация и лимит выплаты на одно видео (капа) исключают накрутку и переплату.',
+                title: 'Лимиты и модерация',
+                text: 'Капа на выплату за один ролик и двухуровневая проверка исключают переплату.'
             },
             {
-                icon: Lock,
-                title: 'Полный контроль бюджета',
-                text: 'Останавливайте кампанию в любой момент — неизрасходованный остаток бюджета возвращается мгновенно.',
+                icon: Dices,
+                title: 'Интеграция с казино',
+                text: 'Ключи доступа и вебхуки передают события трафика прямо в вашу инфраструктуру.'
             },
         ],
     },
     {
         key: 'partner',
-        label: 'B2B-Партнерам',
-        shortLabel: 'Партнер',
+        label: 'B2B-партнёрам',
+        shortLabel: 'Партнёр',
         icon: Handshake,
-        headline: 'Приводите бренды — зарабатывайте на обороте',
+        headline: 'Приводите рекламодателей — получайте процент с оборота',
         description:
-            'Подключайте рекламодателей к платформе и получайте RevShare с их активности — с гибкими условиями и полной прозрачностью в собственной CRM.',
+            'Подключайте рекламодателей к платформе и получайте RevShare с их активности — комиссия начисляется автоматически на каждой транзакции.',
         points: [
             {
                 icon: Users,
-                title: 'Привлечение брендов',
-                text: 'Каждый приведённый рекламодатель закрепляется за вами на всё время работы на платформе.',
+                title: 'Закреплённые бренды',
+                text: 'Приведённый рекламодатель остаётся за вами на всё время работы на платформе.'
             },
             {
                 icon: Percent,
-                title: 'Гибкий RevShare',
-                text: 'На выбор — процент от маржи платформы или процент от валового оборота приведённого бренда.',
+                title: 'Гибкая ставка',
+                text: 'Процент от маржи платформы или от валового оборота — на выбор при подключении.'
             },
             {
                 icon: BarChart3,
-                title: 'Прозрачная CRM',
-                text: 'Видите каждого рекламодателя, его кампании и оборот в реальном времени в личном кабинете.',
-            },
-            {
-                icon: DollarSign,
-                title: 'Пассивный доход',
-                text: 'Комиссия начисляется автоматически на каждой транзакции — без ручных сверок и напоминаний.',
+                title: 'CRM в реальном времени',
+                text: 'Каждый рекламодатель, его кампании и оборот — в одном личном кабинете.'
             },
         ],
     },
 ];
 
-const STEPS = [
+const PROBLEM_SOLUTION = [
     {
-        icon: Send,
-        title: 'Откройте Telegram-бота',
-        text: 'Нажмите «Запустить бота» — регистрация занимает меньше двух минут, без анкет и звонков.',
+        problem: 'Трафик закупается вручную — через десятки чатов, таблиц и личных договорённостей',
+        solution: 'Офферы, криэйторы и бюджеты кампаний — в единой инфраструктуре с историей по каждой сделке',
     },
     {
-        icon: Users,
-        title: 'Выберите роль',
-        text: 'Автор, Рекламодатель или Партнер — интерфейс и сценарий сразу подстроятся под вашу задачу.',
+        problem: 'Выплаты идут через посредников без единого источника правды о том, что кому причитается',
+        solution: 'Прямые крипто-выплаты по фиксированному алгоритму холдов — без ручных сверок',
     },
     {
-        icon: Rocket,
-        title: 'Начните работать',
-        text: 'Возьмите оффер и снимите видео, запустите кампанию или пригласите бренд — что бы ни было вашей целью.',
+        problem: 'Накрутка просмотров и приписки съедают часть бюджета незаметно для рекламодателя',
+        solution: 'Двухуровневая модерация и лимит выплаты на один ролик — до, а не после списания бюджета',
     },
     {
-        icon: Wallet,
-        title: 'Получите результат',
-        text: 'Деньги на балансе в USDT TRC-20, кампания в трекинге, комиссия начислена — автоматически, без ожидания.',
+        problem: 'Бэкенд казино узнаёт о конверсии постфактум, из ручного отчёта раз в неделю',
+        solution: 'Вебхуки и уведомления доставляют события трафика в вашу систему в момент, когда они произошли',
     },
 ];
 
-const TRUST_POINTS = [
+const VIDEO_PLATFORM_STATS = [
     {
-        icon: Lock,
-        title: 'Смарт-контрактная логика холдов',
-        text: 'Средства блокируются и размораживаются по алгоритму — без ручного вмешательства и человеческого фактора.',
+        platform: 'TikTok Video / Spark',
+        share: '48% трафика',
+        avgCheck: '$240 CPM',
+        status: 'АКТИВНО',
+        icon: Film,
+        speed: 'Авто-аппрув за 4 мин'
     },
     {
-        icon: Percent,
-        title: '0% комиссии на вывод',
-        text: 'Вы получаете полную начисленную сумму — платформа не берёт долю с вашего вывода средств.',
+        platform: 'YouTube Shorts',
+        share: '32% трафика',
+        avgCheck: '$280 CPM',
+        status: 'АКТИВНО',
+        icon: PlaySquare,
+        speed: 'Авто-аппрув за 6 мин'
     },
     {
-        icon: Activity,
-        title: 'Живая статистика 24/7',
-        text: 'Просмотры, холды и выплаты обновляются в реальном времени — никаких отчётов раз в неделю.',
-    },
-    {
-        icon: ShieldCheck,
-        title: 'Двухуровневая защита от фрода',
-        text: 'Автоматическая модерация плюс ручная проверка спорных случаев перед каждой крупной выплатой.',
-    },
-    {
-        icon: Zap,
-        title: 'Мгновенные выплаты USDT TRC-20',
-        text: 'Без банков, конвертации валют и посредников — деньги приходят напрямую на ваш кошелёк.',
-    },
-    {
-        icon: LifeBuoy,
-        title: 'Поддержка на связи',
-        text: 'Модераторы и техподдержка отвечают в течение часа — в самом Telegram-боте, без тикет-систем.',
+        platform: 'Instagram Reels',
+        share: '20% трафика',
+        avgCheck: '$220 CPM',
+        status: 'АКТИВНО',
+        icon: Tv,
+        speed: 'Авто-аппрув за 5 мин'
     },
 ];
 
-const HERO_METRICS = [
-    { icon: DollarSign, value: '$2.4M+', label: 'выплачено авторам' },
-    { icon: Users, value: '12 400+', label: 'активных авторов' },
-    { icon: Timer, value: '< 15 мин', label: 'средняя модерация' },
+const LIFECYCLE_STEPS = [
+    {
+        step: '01',
+        title: 'Отправка ссылки',
+        desc: 'Криэйтор скидывает ссылку на ролик (TikTok, Reels, Shorts) в Telegram-бот платформы.',
+        icon: Send
+    },
+    {
+        step: '02',
+        title: 'Антифрод проверка',
+        desc: 'ИИ-фильтр анализирует гео-распределение, удержание и отсутствие накрутки ботов.',
+        icon: ShieldCheck
+    },
+    {
+        step: '03',
+        title: 'Фиксация просмотров',
+        desc: 'Система фиксирует целевые просмотры и автоматически рассчитывает выплату по фиксированному CPM.',
+        icon: BarChart3
+    },
+    {
+        step: '04',
+        title: 'Выплата в USDT',
+        desc: 'Средства мгновенно уходят на кошелек криэйтора в сети TRC-20 без комиссий системы.',
+        icon: Wallet2
+    },
 ];
+
+const FAQ_ITEMS = [
+    {
+        q: 'Как быстро происходит выплата после подтверждения просмотров?',
+        a: 'Выплаты обрабатываются автоматически в сети USDT TRC-20 сразу после прохождения холдового периода и антифрод-проверки ролика. Обычно весь процесс занимает от нескольких минут до часа.',
+    },
+    {
+        q: 'Нужно ли устанавливать сторонние приложения или регистрироваться на сайте?',
+        a: 'Нет. Вся экосистема платформы интегрирована в Telegram-бот. Регистрация, выбор офферов, отправка ссылок на ролики и трекинг баланса происходят прямо в мессенджере за пару кликов.',
+    },
+    {
+        q: 'Как защищены рекламодатели от накрутки ботов и просмотров?',
+        a: 'Система Traffic Inspector анализирует удержание аудитории, географию просмотров и динамику набора охватов. На подозрительный трафик автоматически накладывается холд или блок до ручной проверки модератором.',
+    },
+    {
+        q: 'Какие требования к аккаунтам криэйторов и минимальному порогу входа?',
+        a: 'Никаких жестких требований по количеству подписчиков нет. Вы можете заливать ролики с новых или прогретых аккаунтов TikTok, Instagram Reels и YouTube Shorts — оплата идет строго за целевые просмотры по зафиксированному CPM.',
+    },
+    {
+        q: 'Можно ли интегрировать платформу с моим собственным бэкендом казино?',
+        a: 'Да. Рекламодатели могут использовать персональные ключи доступа и настраивать кастомные вебхуки для мгновенной передачи информации о конверсиях и трафике в свою систему.',
+    },
+];
+
+const LIVE_STREAM_EVENTS = [
+    {
+        tx: '8f2c••••e91a',
+        author: 'cr••••ip',
+        geo: 'LATAM',
+        views: '1.4M',
+        amount: 350.00,
+        status: 'SETTLED',
+        node: 'TikTok · Spark',
+        time: 'сек назад'
+    },
+    {
+        tx: '4a0d••••c220',
+        author: 're••••ng',
+        geo: 'T1',
+        views: '850K',
+        amount: 212.50,
+        status: 'SETTLED',
+        node: 'Shorts · Stream',
+        time: '3 сек назад'
+    },
+    {
+        tx: 'e91f••••0a8c',
+        author: 'sl••••er',
+        geo: 'CIS',
+        views: '2.1M',
+        amount: 525.00,
+        status: 'HOLD',
+        node: 'Reels · Check',
+        time: '8 сек назад'
+    },
+    {
+        tx: '02bb••••44f1',
+        author: 'ti••••ow',
+        geo: 'APAC',
+        views: '620K',
+        amount: 155.00,
+        status: 'SETTLED',
+        node: 'TikTok · Spark',
+        time: '14 сек назад'
+    },
+    {
+        tx: 'c77a••••9de3',
+        author: 'be••••er',
+        geo: 'LATAM',
+        views: '3.4M',
+        amount: 850.00,
+        status: 'VERIFY',
+        node: 'Shorts · AntiBot',
+        time: '22 сек назад'
+    },
+];
+
+// Лента набранных просмотров и заработанных денег для бегущей строки
+const METRICS_TAPE_ROWS = [
+    {views: '+1.4M просмотров', amount: 350.00, geo: 'LATAM', status: 'SETTLED'},
+    {views: '+850K просмотров', amount: 212.50, geo: 'T1', status: 'SETTLED'},
+    {views: '+2.1M просмотров', amount: 525.00, geo: 'CIS', status: 'HOLD'},
+    {views: '+620K просмотров', amount: 155.00, geo: 'APAC', status: 'SETTLED'},
+    {views: '+3.4M просмотров', amount: 850.00, status: 'VERIFY'},
+    {views: '+1.9M просмотров', amount: 475.00, geo: 'MENA', status: 'SETTLED'},
+];
+
+const LEDGER_STATUS_META = {
+    SETTLED: 'text-brand-success',
+    HOLD: 'text-brand-warning',
+    VERIFY: 'text-brand-accent',
+};
 
 function formatUsd(value) {
-    return value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return value.toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
-function GlowBackdrop() {
+function SectionLabel({children}) {
     return (
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            <div className="absolute -top-40 -left-40 h-[32rem] w-[32rem] rounded-full bg-brand-accent/20 blur-[120px]" />
-            <div className="absolute top-1/3 -right-40 h-[28rem] w-[28rem] rounded-full bg-brand-success/10 blur-[120px]" />
-            <div className="absolute bottom-0 left-1/4 h-[24rem] w-[24rem] rounded-full bg-brand-accent/10 blur-[100px]" />
-            <div
-                className="absolute inset-0 opacity-[0.03]"
-                style={{
-                    backgroundImage:
-                        'linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)',
-                    backgroundSize: '48px 48px',
-                }}
-            />
-        </div>
-    );
-}
-
-function SectionLabel({ children }) {
-    return (
-        <div className="inline-flex items-center gap-2 rounded-full border border-brand-border bg-brand-card/60 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-brand-accent backdrop-blur-sm">
-            <Sparkles className="h-3 w-3" />
+        <div
+            className="inline-flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-brand-accent">
+            <span className="h-1.5 w-1.5 rounded-full bg-brand-accent animate-pulse"/>
             {children}
         </div>
     );
 }
 
-export default function LandingPage({ botUsername = 'ugc_flow_bot' }) {
-    const [activeAudience, setActiveAudience] = useState('worker');
+function MetricsTape({dense = false}) {
+    const rows = [...METRICS_TAPE_ROWS, ...METRICS_TAPE_ROWS];
+    return (
+        <div className={`overflow-hidden border-y border-brand-border/70 ${dense ? 'py-2.5' : 'py-4'}`}>
+            <div className="animate-ledger-tape flex w-max items-center gap-8 font-mono text-xs">
+                {rows.map((row, i) => (
+                    <div key={i} className="flex shrink-0 items-center gap-3 whitespace-nowrap">
+                        <span className="text-brand-accent font-semibold">{row.views}</span>
+                        <span className="text-[#f1eee6]">${formatUsd(row.amount)} заработано</span>
+                        <span className="text-ash/60">{row.geo}</span>
+                        <span className={`font-semibold ${LEDGER_STATUS_META[row.status]}`}>{row.status}</span>
+                        <span className="text-brand-border">/</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+export default function LandingPage({botUsername = 'selika_bot', onLoginClick}) {
+    const [activeRole, setActiveRole] = useState('worker');
     const [viewsMillions, setViewsMillions] = useState(10);
+    const [cpmBase, setCpmBase] = useState(250);
+    const [activeSection, setActiveSection] = useState('overview');
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    const [streamFilter, setStreamFilter] = useState('ALL');
+    const [openFaqIndex, setOpenFaqIndex] = useState(null);
+
+    useEffect(() => {
+        const previousTitle = document.title;
+        document.title = `${BRAND_NAME} — инфраструктура трафика, криэйторов и выплат`;
+        return () => {
+            document.title = previousTitle;
+        };
+    }, []);
+
+    useEffect(() => {
+        const sections = NAV_ITEMS.map((item) => document.getElementById(item.id)).filter(Boolean);
+        if (!sections.length) return undefined;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        setActiveSection(entry.target.id);
+                    }
+                });
+            },
+            {rootMargin: '-20% 0px -70% 0px', threshold: 0}
+        );
+        sections.forEach((s) => observer.observe(s));
+        return () => observer.disconnect();
+    }, []);
 
     const botUrl = `${TELEGRAM_BASE_URL}${botUsername}`;
-    const audience = AUDIENCES.find((a) => a.key === activeAudience) ?? AUDIENCES[0];
-    const rate = CALCULATOR_RATES[activeAudience] ?? CALCULATOR_RATES.worker;
+    const role = ROLES.find((r) => r.key === activeRole) ?? ROLES[0];
+    const calculatorRates = useMemo(() => ratesForCpm(cpmBase), [cpmBase]);
+    const rate = calculatorRates[activeRole] ?? calculatorRates.worker;
 
     const calculatedAmount = useMemo(
         () => viewsMillions * rate.cpmPerMillion,
@@ -257,404 +391,738 @@ export default function LandingPage({ botUsername = 'ugc_flow_bot' }) {
 
     const scrollToId = (id) => (e) => {
         e.preventDefault();
-        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setMobileNavOpen(false);
+        document.getElementById(id)?.scrollIntoView({behavior: 'smooth', block: 'start'});
     };
 
+    const filteredEvents = useMemo(() => {
+        if (streamFilter === 'ALL') return LIVE_STREAM_EVENTS;
+        return LIVE_STREAM_EVENTS.filter((e) => e.status === streamFilter);
+    }, [streamFilter]);
+
     return (
-        <div className="relative min-h-screen w-full overflow-x-hidden bg-brand-bg font-sans text-slate-100 antialiased">
-            {/* --- Top nav --------------------------------------------------------------------- */}
-            <header className="sticky top-0 z-50 border-b border-brand-border/60 bg-brand-bg/80 backdrop-blur-lg">
-                <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
+        <div
+            className="relative min-h-screen w-full overflow-x-hidden bg-brand-bg font-sans text-[#f1eee6] antialiased">
+            {/* --- Left rail (desktop) ----------------------------------------------------------- */}
+            <aside
+                className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col justify-between border-r border-brand-border/80 bg-brand-bg px-7 py-9 lg:flex">
+                <div>
                     <div className="flex items-center gap-2.5">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand-accent/30 bg-brand-accent/10 text-brand-accent">
-                            <Video className="h-[1.125rem] w-[1.125rem]" />
+                        <div
+                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border bg-brand-card text-brand-accent shadow-lg">
+                            <Workflow className="h-4 w-4"/>
                         </div>
-                        <span className="text-base font-extrabold tracking-tight text-white">
-                            UGC <span className="text-brand-accent">Flow</span>
-                        </span>
+                        <span
+                            className="font-display text-xl uppercase tracking-tight text-[#f1eee6]">{BRAND_NAME}</span>
+                    </div>
+                    <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ash">
+                        {BRAND_DOMAIN}
                     </div>
 
-                    <nav className="hidden items-center gap-8 text-sm font-medium text-slate-400 md:flex">
-                        <a href="#audiences" onClick={scrollToId('audiences')} className="transition-colors hover:text-white">
-                            Аудитории
-                        </a>
-                        <a href="#calculator" onClick={scrollToId('calculator')} className="transition-colors hover:text-white">
-                            Калькулятор
-                        </a>
-                        <a href="#how-it-works" onClick={scrollToId('how-it-works')} className="transition-colors hover:text-white">
-                            Как это работает
-                        </a>
-                        <a href="#trust" onClick={scrollToId('trust')} className="transition-colors hover:text-white">
-                            Надежность
-                        </a>
+                    <nav className="relative mt-12 space-y-1 border-l border-brand-border pl-5">
+                        {NAV_ITEMS.map((item) => {
+                            const isActive = activeSection === item.id;
+                            return (
+                                <a
+                                    key={item.id}
+                                    href={`#${item.id}`}
+                                    onClick={scrollToId(item.id)}
+                                    className="relative block py-2 text-sm transition-colors"
+                                >
+                                    <span
+                                        className={`absolute -left-5 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r transition-colors ${
+                                            isActive ? 'bg-brand-accent' : 'bg-transparent'
+                                        }`}
+                                    />
+                                    <span
+                                        className={isActive ? 'font-semibold text-[#f1eee6]' : 'text-ash hover:text-[#f1eee6]'}>
+                                        {item.label}
+                                    </span>
+                                </a>
+                            );
+                        })}
                     </nav>
+                </div>
 
+                <div className="space-y-3">
+                    {onLoginClick && (
+                        <button
+                            type="button"
+                            onClick={onLoginClick}
+                            className="flex w-full items-center justify-center gap-2 rounded-lg border border-brand-border bg-brand-card px-4 py-3 text-sm font-medium text-ash transition-all hover:border-brand-accent/50 hover:text-[#f1eee6]"
+                        >
+                            <LogIn className="h-3.5 w-3.5 text-brand-accent"/>
+                            Войти в кабинет
+                        </button>
+                    )}
                     <a
                         href={botUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group flex items-center gap-1.5 rounded-xl bg-brand-accent px-4 py-2.5 text-xs font-bold text-brand-bg transition-all hover:bg-brand-accentHover"
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-accent px-4 py-3 text-sm font-semibold text-brand-bg shadow-lg shadow-brand-accent/15 transition-all hover:bg-brand-accentHover"
                     >
-                        <Send className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Открыть бота</span>
-                        <span className="sm:hidden">Бот</span>
+                        <Send className="h-3.5 w-3.5"/>
+                        Открыть бота
                     </a>
                 </div>
-            </header>
+            </aside>
 
-            {/* --- Hero -------------------------------------------------------------------------- */}
-            <section className="relative isolate">
-                <GlowBackdrop />
-                <div className="relative mx-auto max-w-5xl px-5 pb-20 pt-20 text-center sm:px-8 sm:pb-28 sm:pt-28">
-                    <div className="mx-auto mb-6 flex justify-center">
-                        <SectionLabel>Платформа №1 для UGC-монетизации в Telegram</SectionLabel>
+            {/* --- Top bar (mobile) -------------------------------------------------------------- */}
+            <header
+                className="sticky top-0 z-50 flex items-center justify-between border-b border-brand-border/80 bg-brand-bg/90 px-5 py-4 backdrop-blur-md lg:hidden">
+                <div className="flex items-center gap-2.5">
+                    <div
+                        className="flex h-8 w-8 items-center justify-center rounded-md border border-brand-border bg-brand-card text-brand-accent">
+                        <Workflow className="h-4 w-4"/>
                     </div>
-
-                    <h1 className="mx-auto max-w-4xl text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl">
-                        Заливай видео.{' '}
-                        <span className="bg-gradient-to-r from-brand-accent to-brand-success bg-clip-text text-transparent">
-                            Масштабируй трафик.
-                        </span>{' '}
-                        Зарабатывай в USDT.
-                    </h1>
-
-                    <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg">
-                        UGC Flow соединяет авторов контента, рекламодателей и B2B-партнёров в одной прозрачной
-                        экосистеме — с честным CPM, защитой от фрода и мгновенными выплатами прямо в Telegram.
-                    </p>
-
-                    <div className="mt-10 flex flex-col items-center justify-center gap-3.5 sm:flex-row">
-                        <a
-                            href={botUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-accent px-7 py-4 text-sm font-bold text-brand-bg shadow-[0_0_40px_-10px_rgba(56,189,248,0.6)] transition-all hover:bg-brand-accentHover hover:shadow-[0_0_50px_-8px_rgba(56,189,248,0.8)] sm:w-auto"
-                        >
-                            <Rocket className="h-4 w-4" />
-                            Запустить бота
-                            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                        </a>
-                        <a
-                            href="#audiences"
-                            onClick={scrollToId('audiences')}
-                            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-brand-border bg-brand-card/60 px-7 py-4 text-sm font-bold text-slate-200 backdrop-blur-sm transition-all hover:border-brand-accent/40 hover:text-white sm:w-auto"
-                        >
-                            Узнать больше
-                            <ArrowDown className="h-4 w-4" />
-                        </a>
-                    </div>
-
-                    <div className="mx-auto mt-16 grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
-                        {HERO_METRICS.map((metric) => (
-                            <div
-                                key={metric.label}
-                                className="rounded-2xl border border-brand-border bg-brand-card/50 px-5 py-5 backdrop-blur-sm transition-colors hover:border-brand-accent/30"
-                            >
-                                <div className="mb-2 flex items-center justify-center gap-1.5 text-brand-accent">
-                                    <metric.icon className="h-4 w-4" />
-                                </div>
-                                <div className="text-2xl font-extrabold text-white sm:text-3xl">{metric.value}</div>
-                                <div className="mt-1 text-xs text-slate-500">{metric.label}</div>
-                            </div>
-                        ))}
-                    </div>
+                    <span className="font-display text-lg uppercase tracking-tight text-[#f1eee6]">{BRAND_NAME}</span>
                 </div>
-            </section>
+                <div className="flex items-center gap-2">
+                    <a
+                        href={botUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 rounded-md bg-brand-accent px-3 py-2 text-xs font-semibold text-brand-bg"
+                    >
+                        <Send className="h-3.5 w-3.5"/>
+                        Бот
+                    </a>
+                    <button
+                        type="button"
+                        onClick={() => setMobileNavOpen((v) => !v)}
+                        className="flex h-8 w-8 items-center justify-center rounded-md border border-brand-border text-ash"
+                        aria-label="Меню"
+                    >
+                        {mobileNavOpen ? <X className="h-4 w-4"/> : <Menu className="h-4 w-4"/>}
+                    </button>
+                </div>
+            </header>
+            {mobileNavOpen && (
+                <div className="sticky top-[57px] z-50 border-b border-brand-border bg-brand-card px-5 py-4 lg:hidden">
+                    <nav className="flex flex-col gap-1.5">
+                        {NAV_ITEMS.map((item) => (
+                            <a
+                                key={item.id}
+                                href={`#${item.id}`}
+                                onClick={scrollToId(item.id)}
+                                className={`rounded-md px-3 py-2 text-sm ${
+                                    activeSection === item.id ? 'bg-brand-bg text-[#f1eee6] font-semibold' : 'text-ash'
+                                }`}
+                            >
+                                {item.label}
+                            </a>
+                        ))}
+                        {onLoginClick && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setMobileNavOpen(false);
+                                    onLoginClick();
+                                }}
+                                className="mt-2 flex items-center gap-2 rounded-md border border-brand-border px-3 py-2.5 text-left text-sm text-ash bg-brand-bg"
+                            >
+                                <LogIn className="h-3.5 w-3.5 text-brand-accent"/>
+                                Войти в кабинет
+                            </button>
+                        )}
+                    </nav>
+                </div>
+            )}
 
-            {/* --- Audience switcher -------------------------------------------------------------- */}
-            <section id="audiences" className="relative border-t border-brand-border/60 py-20 sm:py-28">
-                <div className="mx-auto max-w-6xl px-5 sm:px-8">
-                    <div className="mx-auto max-w-2xl text-center">
-                        <SectionLabel>Экосистема</SectionLabel>
-                        <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-                            Для каждого своя выгода
+            {/* --- Main content ------------------------------------------------------------------- */}
+            <div className="lg:pl-64">
+                {/* --- Hero ---------------------------------------------------------------------- */}
+                <section id="overview" className="scroll-mt-20 border-b border-brand-border/70 relative">
+                    <div
+                        className="absolute top-0 right-0 -z-10 h-96 w-96 rounded-full bg-brand-accent/5 blur-3xl pointer-events-none"/>
+                    <div className="px-6 pb-16 pt-20 sm:px-12 sm:pt-24 lg:px-16">
+                        <div className="max-w-3xl">
+                            <SectionLabel>Инфраструктура автоматизации видео-трафика</SectionLabel>
+                            <h1 className="mt-6 font-display text-[12vw] uppercase leading-[0.92] tracking-tight text-[#f1eee6] sm:text-6xl lg:text-7xl">
+                                Ролики в топ.
+                                <br/>
+                                <span className="text-brand-accent">Выплаты в USDT.</span>
+                            </h1>
+                            <p className="mt-7 max-w-xl text-base leading-relaxed text-ash sm:text-lg">
+                                {BRAND_NAME} объединяет сети видео-криэйторов, автоматический учет просмотров из TikTok,
+                                Reels и Shorts и мгновенные крипто-расчеты.
+                            </p>
+
+                            <div className="mt-10 flex flex-col gap-3.5 sm:flex-row">
+                                <a
+                                    href={botUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="group flex items-center justify-center gap-2 rounded-lg bg-brand-accent px-7 py-4 text-sm font-semibold text-brand-bg shadow-xl shadow-brand-accent/20 transition-all hover:bg-brand-accentHover"
+                                >
+                                    <Send className="h-4 w-4"/>
+                                    Запустить через Telegram
+                                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1"/>
+                                </a>
+                                {onLoginClick && (
+                                    <button
+                                        type="button"
+                                        onClick={onLoginClick}
+                                        className="flex items-center justify-center gap-2 rounded-lg border border-brand-border bg-brand-card/60 px-7 py-4 text-sm font-semibold text-[#f1eee6] backdrop-blur transition-all hover:border-brand-accent/50 hover:bg-brand-card"
+                                    >
+                                        <LogIn className="h-4 w-4 text-brand-accent"/>
+                                        Войти в систему
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <MetricsTape/>
+                </section>
+
+                {/* --- Problem -> Solution ------------------------------------------------------------- */}
+                <section id="problem"
+                         className="scroll-mt-20 border-b border-brand-border/70 px-6 py-20 sm:px-12 lg:px-16">
+                    <div className="max-w-2xl">
+                        <SectionLabel>Архитектура превосходства</SectionLabel>
+                        <h2 className="mt-5 font-display text-3xl uppercase leading-[0.95] tracking-tight text-[#f1eee6] sm:text-4xl">
+                            Индустрия теряет бюджеты на рутине. Мы автоматизируем каждый шаг.
                         </h2>
-                        <p className="mt-4 text-sm text-slate-400 sm:text-base">
-                            UGC Flow построен как единая экосистема — выберите свою роль, чтобы увидеть, что платформа
-                            предлагает именно вам.
+                        <p className="mt-4 text-sm text-ash">
+                            Сравните ручной подход в чатах и таблицах с бескомпромиссной точностью {BRAND_NAME}.
                         </p>
                     </div>
 
-                    <div className="mx-auto mt-10 flex max-w-xl flex-wrap justify-center gap-2 rounded-2xl border border-brand-border bg-brand-card/40 p-1.5 backdrop-blur-sm">
-                        {AUDIENCES.map((a) => (
+                    <div className="mt-12 overflow-hidden rounded-xl border border-brand-border bg-brand-card/40">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 border-b border-brand-border">
+                            <div
+                                className="bg-brand-card/80 px-6 py-4 font-mono text-xs uppercase tracking-wider text-ash sm:border-r sm:border-brand-border flex items-center gap-2">
+                                <XCircle className="h-4 w-4 text-brand-danger"/>
+                                Ручное управление и хаос
+                            </div>
+                            <div
+                                className="bg-brand-accent/[0.08] px-6 py-4 font-mono text-xs uppercase tracking-wider text-brand-accent flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-brand-success"/>
+                                Инфраструктура {BRAND_NAME}
+                            </div>
+                        </div>
+                        {PROBLEM_SOLUTION.map((row, i) => (
+                            <div key={i}
+                                 className={`grid grid-cols-1 sm:grid-cols-2 ${i > 0 ? 'border-t border-brand-border' : ''}`}>
+                                <div
+                                    className="flex items-start gap-3.5 px-6 py-5 sm:border-r sm:border-brand-border bg-brand-bg/30">
+                                    <span
+                                        className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-danger/10 text-brand-danger text-xs font-bold">✕</span>
+                                    <p className="text-sm text-ash leading-relaxed">{row.problem}</p>
+                                </div>
+                                <div className="flex items-start gap-3.5 px-6 py-5 bg-brand-accent/[0.03]">
+                                    <span
+                                        className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-success/10 text-brand-success text-xs font-bold">✓</span>
+                                    <p className="text-sm text-[#f1eee6] leading-relaxed">{row.solution}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
+                {/* --- Roles ----------------------------------------------------------------------------- */}
+                <section id="roles"
+                         className="scroll-mt-20 border-b border-brand-border/70 px-6 py-20 sm:px-12 lg:px-16">
+                    <div className="max-w-2xl">
+                        <SectionLabel>Экосистема участников</SectionLabel>
+                        <h2 className="mt-5 font-display text-3xl uppercase leading-[0.95] tracking-tight text-[#f1eee6] sm:text-4xl">
+                            Инструменты под каждую задачу
+                        </h2>
+                        <p className="mt-4 text-sm text-ash">
+                            Платформа создана с учетом интересов всех участников рынка: от автономных криэйторов до
+                            крупных операторов.
+                        </p>
+                    </div>
+
+                    <div className="mt-10 flex flex-wrap gap-2 border-b border-brand-border pb-px">
+                        {ROLES.map((r) => (
                             <button
-                                key={a.key}
+                                key={r.key}
                                 type="button"
-                                onClick={() => setActiveAudience(a.key)}
-                                className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold transition-all sm:text-sm ${
-                                    activeAudience === a.key
-                                        ? 'bg-brand-accent text-brand-bg shadow-lg shadow-brand-accent/20'
-                                        : 'text-slate-400 hover:text-white'
+                                onClick={() => setActiveRole(r.key)}
+                                className={`flex items-center gap-2.5 rounded-t-lg border-t border-x px-5 py-3.5 text-sm font-semibold transition-all ${
+                                    activeRole === r.key
+                                        ? 'border-brand-border bg-brand-card text-[#f1eee6] shadow-sm'
+                                        : 'border-transparent text-ash hover:text-[#f1eee6] bg-brand-bg'
                                 }`}
                             >
-                                <a.icon className="h-4 w-4" />
-                                {a.label}
+                                <r.icon
+                                    className={`h-4 w-4 ${activeRole === r.key ? 'text-brand-accent' : 'text-ash'}`}/>
+                                {r.label}
                             </button>
                         ))}
                     </div>
 
-                    <div className="mt-12 grid grid-cols-1 gap-10 lg:grid-cols-5 lg:gap-12">
-                        <div className="lg:col-span-2">
-                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-brand-accent/30 bg-brand-accent/10 text-brand-accent">
-                                <audience.icon className="h-5 w-5" />
-                            </div>
-                            <h3 className="mt-5 text-2xl font-extrabold leading-tight text-white sm:text-3xl">
-                                {audience.headline}
-                            </h3>
-                            <p className="mt-4 text-sm leading-relaxed text-slate-400 sm:text-base">
-                                {audience.description}
-                            </p>
-                            <a
-                                href={botUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-brand-accent transition-colors hover:text-brand-accentHover"
-                            >
-                                Начать как {audience.shortLabel.toLowerCase()}
-                                <ChevronRight className="h-4 w-4" />
-                            </a>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-3">
-                            {audience.points.map((point) => (
-                                <div
-                                    key={point.title}
-                                    className="group rounded-2xl border border-brand-border bg-brand-card/50 p-5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-brand-accent/40 hover:bg-brand-card"
+                    <div className="rounded-b-xl rounded-tr-xl border border-brand-border bg-brand-card/60 p-8 sm:p-10">
+                        <div className="grid grid-cols-1 gap-10 lg:grid-cols-5 lg:gap-12 items-center">
+                            <div className="lg:col-span-2">
+                                <h3 className="font-display text-2xl uppercase tracking-tight text-[#f1eee6] sm:text-3xl leading-snug">
+                                    {role.headline}
+                                </h3>
+                                <p className="mt-4 text-sm leading-relaxed text-ash">{role.description}</p>
+                                <a
+                                    href={botUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-brand-accent transition-colors hover:text-brand-accentHover"
                                 >
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand-border bg-brand-bg text-brand-accent transition-colors group-hover:border-brand-accent/40">
-                                        <point.icon className="h-4 w-4" />
+                                    Начать работу в роли {role.shortLabel.toLowerCase()}
+                                    <ChevronRight className="h-4 w-4"/>
+                                </a>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:col-span-3">
+                                {role.points.map((point) => (
+                                    <div key={point.title}
+                                         className="rounded-lg border border-brand-border bg-brand-bg/80 p-5 shadow-sm transition-transform hover:-translate-y-1">
+                                        <div
+                                            className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-card border border-brand-border text-brand-accent">
+                                            <point.icon className="h-4 w-4"/>
+                                        </div>
+                                        <h4 className="mt-4 text-sm font-semibold text-[#f1eee6]">{point.title}</h4>
+                                        <p className="mt-2 text-xs leading-relaxed text-ash">{point.text}</p>
                                     </div>
-                                    <h4 className="mt-3.5 text-sm font-bold text-white">{point.title}</h4>
-                                    <p className="mt-1.5 text-xs leading-relaxed text-slate-400">{point.text}</p>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            {/* --- Calculator ---------------------------------------------------------------------- */}
-            <section id="calculator" className="relative border-t border-brand-border/60 py-20 sm:py-28">
-                <div className="mx-auto max-w-4xl px-5 sm:px-8">
-                    <div className="mx-auto max-w-2xl text-center">
-                        <SectionLabel>Калькулятор</SectionLabel>
-                        <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-                            Рассчитайте свой потенциал
+                {/* --- Calculator ---------------------------------------------------------------------- */}
+                <section id="calculator"
+                         className="scroll-mt-20 border-b border-brand-border/70 px-6 py-20 sm:px-12 lg:px-16">
+                    <div className="max-w-2xl">
+                        <SectionLabel>Финансовое моделирование</SectionLabel>
+                        <h2 className="mt-5 font-display text-3xl uppercase leading-[0.95] tracking-tight text-[#f1eee6] sm:text-4xl">
+                            Калькулятор доходности
                         </h2>
-                        <p className="mt-4 text-sm text-slate-400 sm:text-base">
-                            Передвиньте ползунок — цифра ниже пересчитывается мгновенно, в зависимости от выбранной
-                            роли.
+                        <p className="mt-4 text-sm text-ash">
+                            Настройте объем просмотров и базовый CPM для оценки потенциала кампании или заработка.
                         </p>
                     </div>
 
-                    <div className="relative mt-12 overflow-hidden rounded-3xl border border-brand-border bg-brand-card/60 p-6 backdrop-blur-sm sm:p-10">
-                        <div
-                            className="pointer-events-none absolute -top-24 right-0 h-64 w-64 rounded-full blur-[100px]"
-                            style={{ background: activeAudience === 'advertiser' ? 'rgba(56,189,248,0.15)' : 'rgba(16,185,129,0.15)' }}
-                        />
-
-                        <div className="relative flex flex-wrap justify-center gap-2">
-                            {AUDIENCES.map((a) => (
+                    <div
+                        className="mt-12 rounded-xl border border-brand-border bg-brand-card/50 p-6 sm:p-10 shadow-2xl">
+                        <div className="flex flex-wrap gap-2.5 pb-6 border-b border-brand-border">
+                            {ROLES.map((r) => (
                                 <button
-                                    key={a.key}
+                                    key={r.key}
                                     type="button"
-                                    onClick={() => setActiveAudience(a.key)}
-                                    className={`rounded-full border px-4 py-2 text-xs font-bold transition-all ${
-                                        activeAudience === a.key
-                                            ? 'border-brand-accent bg-brand-accent/10 text-brand-accent'
-                                            : 'border-brand-border text-slate-400 hover:text-white'
+                                    onClick={() => setActiveRole(r.key)}
+                                    className={`rounded-lg border px-4 py-2 text-xs font-semibold transition-all ${
+                                        activeRole === r.key
+                                            ? 'border-brand-accent bg-brand-accent/10 text-brand-accent shadow-sm'
+                                            : 'border-brand-border bg-brand-bg text-ash hover:text-[#f1eee6]'
                                     }`}
                                 >
-                                    {a.shortLabel}
+                                    {r.shortLabel}
                                 </button>
                             ))}
                         </div>
 
-                        <div className="relative mt-10 text-center">
-                            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                {rate.label}
-                            </div>
-                            <div className="mt-3 flex items-baseline justify-center gap-1">
-                                <span className="text-2xl font-extrabold text-slate-500">$</span>
-                                <span className="bg-gradient-to-r from-brand-accent to-brand-success bg-clip-text text-5xl font-extrabold tracking-tight text-transparent sm:text-6xl">
-                                    {formatUsd(calculatedAmount)}
-                                </span>
-                            </div>
-                            <div className="mt-3 font-mono text-[11px] text-slate-500">
-                                {viewsMillions.toLocaleString('ru-RU')}
-                                {viewsMillions >= 50 ? '+' : ''} 000 000 просмотров × ${rate.cpmPerMillion} / 1 000 000 = $
-                                {formatUsd(calculatedAmount)}
-                            </div>
-                        </div>
-
-                        <div className="relative mt-10">
-                            <div className="mb-3 flex items-center justify-between text-xs font-semibold text-slate-400">
-                                <span>Объём просмотров</span>
-                                <span className="rounded-lg border border-brand-border bg-brand-bg px-2.5 py-1 font-mono text-brand-accent">
-                                    {viewsMillions.toLocaleString('ru-RU')}
-                                    {viewsMillions >= 50 ? '+' : ''}M
-                                </span>
-                            </div>
-                            <input
-                                type="range"
-                                min={1}
-                                max={50}
-                                step={1}
-                                value={viewsMillions}
-                                onChange={(e) => setViewsMillions(Number(e.target.value))}
-                                className="h-2 w-full cursor-pointer appearance-none rounded-full bg-brand-border accent-brand-accent"
-                                aria-label="Объём просмотров в миллионах"
-                            />
-                            <div className="mt-2 flex justify-between font-mono text-[10px] text-slate-600">
-                                <span>1M</span>
-                                <span>50M+</span>
-                            </div>
-                        </div>
-
-                        <p className="relative mt-8 text-center text-[11px] leading-relaxed text-slate-600">
-                            Расчёт ориентировочный и основан на средних ставках платформы — точные условия зависят от
-                            конкретного оффера, кампании или партнёрского соглашения.
-                        </p>
-                    </div>
-                </div>
-            </section>
-
-            {/* --- How it works ---------------------------------------------------------------------- */}
-            <section id="how-it-works" className="relative border-t border-brand-border/60 py-20 sm:py-28">
-                <div className="mx-auto max-w-6xl px-5 sm:px-8">
-                    <div className="mx-auto max-w-2xl text-center">
-                        <SectionLabel>Процесс</SectionLabel>
-                        <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-                            Как это работает
-                        </h2>
-                        <p className="mt-4 text-sm text-slate-400 sm:text-base">
-                            От первого сообщения боту до первой выплаты — четыре простых шага, без анкет и ожидания
-                            одобрения службой безопасности.
-                        </p>
-                    </div>
-
-                    <div className="relative mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                        <div className="pointer-events-none absolute left-0 right-0 top-11 hidden h-px bg-gradient-to-r from-transparent via-brand-border to-transparent lg:block" />
-                        {STEPS.map((step, index) => (
-                            <div key={step.title} className="relative">
-                                <div className="flex items-center gap-3 lg:flex-col lg:items-start lg:gap-0">
-                                    <div className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-brand-accent/30 bg-brand-bg text-brand-accent ring-4 ring-brand-bg">
-                                        <step.icon className="h-[1.125rem] w-[1.125rem]" />
-                                    </div>
-                                    <div className="font-mono text-xs font-bold text-slate-600 lg:mt-4">
-                                        Шаг {index + 1}
-                                    </div>
-                                </div>
-                                <h4 className="mt-3 text-base font-bold text-white">{step.title}</h4>
-                                <p className="mt-2 text-xs leading-relaxed text-slate-400">{step.text}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* --- Trust / advantages ------------------------------------------------------------------ */}
-            <section id="trust" className="relative border-t border-brand-border/60 py-20 sm:py-28">
-                <div className="mx-auto max-w-6xl px-5 sm:px-8">
-                    <div className="mx-auto max-w-2xl text-center">
-                        <SectionLabel>Надежность</SectionLabel>
-                        <h2 className="mt-5 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-                            Платформе можно доверять
-                        </h2>
-                        <p className="mt-4 text-sm text-slate-400 sm:text-base">
-                            Прозрачность и безопасность — не лозунг, а то, как устроена каждая транзакция внутри UGC
-                            Flow.
-                        </p>
-                    </div>
-
-                    <div className="mt-14 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {TRUST_POINTS.map((point) => (
+                        <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
                             <div
-                                key={point.title}
-                                className="group relative overflow-hidden rounded-2xl border border-brand-border bg-brand-card/50 p-6 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-brand-success/40"
-                            >
-                                <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-brand-success/0 blur-2xl transition-colors group-hover:bg-brand-success/10" />
-                                <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-brand-success/30 bg-brand-success/10 text-brand-success">
-                                    <point.icon className="h-[1.125rem] w-[1.125rem]" />
+                                className="lg:col-span-1 border-b lg:border-b-0 lg:border-r border-brand-border pb-6 lg:pb-0 lg:pr-8">
+                                <div className="font-mono text-xs font-semibold uppercase tracking-wider text-ash">
+                                    {rate.label}
                                 </div>
-                                <h4 className="relative mt-4 text-sm font-bold text-white">{point.title}</h4>
-                                <p className="relative mt-2 text-xs leading-relaxed text-slate-400">{point.text}</p>
+                                <div className="mt-3 flex items-baseline gap-1">
+                                    <span className="font-display text-3xl text-brand-accent">$</span>
+                                    <span
+                                        className="font-display text-5xl uppercase tracking-tight text-[#f1eee6] sm:text-6xl">
+                                        {formatUsd(calculatedAmount)}
+                                    </span>
+                                </div>
+                                <div className="mt-3 font-mono text-[11px] text-ash/80">
+                                    {viewsMillions.toLocaleString('ru-RU')}M просмотров по ставке
+                                    ${formatUsd(rate.cpmPerMillion)} / 1M
+                                </div>
+                            </div>
+
+                            <div className="lg:col-span-2 space-y-6">
+                                <div>
+                                    <div
+                                        className="mb-2 flex items-center justify-between font-mono text-xs font-semibold text-ash">
+                                        <span>Объём просмотров в месяц</span>
+                                        <span
+                                            className="rounded border border-brand-border bg-brand-bg px-2.5 py-1 text-brand-accent">
+                                            {viewsMillions.toLocaleString('ru-RU')}M просмотров
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min={1}
+                                        max={50}
+                                        step={1}
+                                        value={viewsMillions}
+                                        onChange={(e) => setViewsMillions(Number(e.target.value))}
+                                        className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-bg accent-brand-accent border border-brand-border"
+                                    />
+                                </div>
+
+                                <div>
+                                    <div
+                                        className="mb-2 flex items-center justify-between font-mono text-xs font-semibold text-ash">
+                                        <span>Базовая ставка CPM</span>
+                                        <span
+                                            className="rounded border border-brand-border bg-brand-bg px-2.5 py-1 text-brand-accent">
+                                            ${cpmBase} за 1M
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min={100}
+                                        max={2000}
+                                        step={25}
+                                        value={cpmBase}
+                                        onChange={(e) => setCpmBase(Number(e.target.value))}
+                                        className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-bg accent-brand-accent border border-brand-border"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <p className="mt-8 pt-6 border-t border-brand-border text-xs text-ash/70 leading-relaxed">
+                            Расчет является демонстрационным. Финальные условия и маржинальность платформы фиксируются в
+                            момент подписания оффера или запуска потока.
+                        </p>
+                    </div>
+                </section>
+
+                {/* --- Video Platforms & Telemetry Matrix ---------------------------------- */}
+                <section id="telemetry"
+                         className="scroll-mt-20 border-b border-brand-border/70 px-6 py-20 sm:px-12 lg:px-16">
+                    <div className="max-w-2xl mb-12">
+                        <SectionLabel>Видео-экосистема</SectionLabel>
+                        <h2 className="mt-5 font-display text-3xl uppercase leading-[0.95] tracking-tight text-[#f1eee6] sm:text-4xl">
+                            Интеграция с ключевыми видео-площадками
+                        </h2>
+                        <p className="mt-4 text-sm text-ash">
+                            Автоматический трекинг роликов в TikTok, Shorts и Reels с защитой от накрутки и быстрой
+                            верификацией просмотров.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {VIDEO_PLATFORM_STATS.map((item, index) => (
+                            <div key={index}
+                                 className="rounded-xl border border-brand-border bg-brand-card/60 p-6 relative overflow-hidden transition-all hover:border-brand-accent/40">
+                                <div
+                                    className="absolute top-0 right-0 h-24 w-24 rounded-full bg-brand-accent/5 blur-2xl pointer-events-none"/>
+                                <div className="flex items-center justify-between pb-4 border-b border-brand-border">
+                                    <div className="flex items-center gap-2.5">
+                                        <item.icon className="h-4 w-4 text-brand-accent"/>
+                                        <span
+                                            className="font-mono text-sm font-bold text-[#f1eee6]">{item.platform}</span>
+                                    </div>
+                                    <span
+                                        className="inline-flex items-center gap-1.5 rounded-full border border-brand-border bg-brand-bg px-2.5 py-0.5 font-mono text-[10px] font-semibold text-brand-success">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-brand-success animate-pulse"/>
+                                        {item.status}
+                                    </span>
+                                </div>
+                                <div className="mt-4 grid grid-cols-2 gap-4 font-mono text-xs">
+                                    <div>
+                                        <span className="text-ash/70 block text-[10px] uppercase">Доля в сети</span>
+                                        <span
+                                            className="text-[#f1eee6] font-bold text-sm mt-0.5 block">{item.share}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-ash/70 block text-[10px] uppercase">Средний CPM</span>
+                                        <span
+                                            className="text-brand-accent font-bold text-sm mt-0.5 block">{item.avgCheck}</span>
+                                    </div>
+                                </div>
+                                <div
+                                    className="mt-4 pt-3 border-t border-brand-border/60 flex items-center justify-between font-mono text-[11px] text-ash">
+                                    <span>Режим: {item.speed}</span>
+                                    <Share2 className="h-3.5 w-3.5 text-ash/60"/>
+                                </div>
                             </div>
                         ))}
                     </div>
-                </div>
-            </section>
+                </section>
 
-            {/* --- Footer CTA ---------------------------------------------------------------------------- */}
-            <section className="relative border-t border-brand-border/60 py-20 sm:py-28">
-                <div className="mx-auto max-w-4xl px-5 sm:px-8">
-                    <div className="relative overflow-hidden rounded-3xl border border-brand-accent/30 bg-gradient-to-br from-brand-card via-brand-card to-brand-bg p-10 text-center sm:p-16">
-                        <div className="pointer-events-none absolute inset-0">
-                            <div className="absolute -top-20 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-brand-accent/20 blur-[100px]" />
-                        </div>
-
-                        <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-accent/30 bg-brand-accent/10 text-brand-accent">
-                            <Rocket className="h-6 w-6" />
-                        </div>
-
-                        <h2 className="relative mt-6 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-                            Готовы начать зарабатывать?
+                {/* --- Submission Lifecycle Pipeline --------------------------------------- */}
+                <section id="lifecycle"
+                         className="scroll-mt-20 border-b border-brand-border/70 px-6 py-20 sm:px-12 lg:px-16">
+                    <div className="max-w-2xl mb-12">
+                        <SectionLabel>Пайплайн расчётов</SectionLabel>
+                        <h2 className="mt-5 font-display text-3xl uppercase leading-[0.95] tracking-tight text-[#f1eee6] sm:text-4xl">
+                            Жизненный цикл ролика: от залива до выплаты
                         </h2>
-                        <p className="relative mx-auto mt-4 max-w-xl text-sm text-slate-400 sm:text-base">
-                            Присоединяйтесь к UGC Flow прямо сейчас — регистрация занимает меньше двух минут и
-                            проходит полностью внутри Telegram.
+                        <p className="mt-4 text-sm text-ash">
+                            Четыре простых шага автоматизированного конвейера исключают человеческий фактор и задержки
+                            выплат.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {LIFECYCLE_STEPS.map((item, index) => (
+                            <div key={index}
+                                 className="rounded-xl border border-brand-border bg-brand-card/60 p-6 relative flex flex-col justify-between transition-all hover:border-brand-accent/50">
+                                <div>
+                                    <div className="flex items-center justify-between mb-6">
+                                        <span
+                                            className="font-mono text-xs font-bold px-2.5 py-1 rounded bg-brand-bg border border-brand-border text-brand-accent">
+                                            ШАГ {item.step}
+                                        </span>
+                                        <div
+                                            className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-bg border border-brand-border text-brand-accent">
+                                            <item.icon className="h-4 w-4"/>
+                                        </div>
+                                    </div>
+                                    <h3 className="font-display text-lg uppercase tracking-tight text-[#f1eee6] mb-2">
+                                        {item.title}
+                                    </h3>
+                                    <p className="text-xs leading-relaxed text-ash">
+                                        {item.desc}
+                                    </p>
+                                </div>
+                                <div
+                                    className="mt-6 pt-4 border-t border-brand-border/60 flex items-center justify-between font-mono text-[10px] text-ash/60">
+                                    <span>Статус: Автоматически</span>
+                                    <span className="text-brand-success font-semibold">100% Secure</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
+                {/* --- Live Inspector Section (With masked usernames & TRX hashes) ------------ */}
+                <section id="inspector"
+                         className="scroll-mt-20 border-b border-brand-border/70 px-6 py-20 sm:px-12 lg:px-16">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+                        <div>
+                            <SectionLabel>Live-мониторинг</SectionLabel>
+                            <h2 className="mt-5 font-display text-3xl uppercase leading-[0.95] tracking-tight text-[#f1eee6] sm:text-4xl">
+                                Инспектор трафика и выплат в реальном времени
+                            </h2>
+                            <p className="mt-4 text-sm text-ash max-w-xl">
+                                Прозрачность каждого потока: от загрузки ролика до мгновенного подтверждения и выплаты в
+                                USDT TRC-20.
+                            </p>
+                        </div>
+                        <div
+                            className="flex items-center gap-1.5 rounded-lg border border-brand-border bg-brand-card p-1">
+                            {['ALL', 'SETTLED', 'HOLD'].map((filter) => (
+                                <button
+                                    key={filter}
+                                    onClick={() => setStreamFilter(filter)}
+                                    className={`rounded-md px-3.5 py-1.5 font-mono text-xs font-medium transition-all ${
+                                        streamFilter === filter
+                                            ? 'bg-brand-accent text-brand-bg shadow'
+                                            : 'text-ash hover:text-[#f1eee6]'
+                                    }`}
+                                >
+                                    {filter === 'ALL' ? 'Все события' : filter}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="rounded-xl border border-brand-border bg-brand-card/60 overflow-hidden shadow-xl">
+                        <div
+                            className="grid grid-cols-12 gap-4 border-b border-brand-border bg-brand-card/90 px-6 py-3.5 font-mono text-[11px] uppercase tracking-wider text-ash">
+                            <div className="col-span-4 sm:col-span-3">TRX Хэш сети</div>
+                            <div className="col-span-3 sm:col-span-3">Криэйтор / ГЕО</div>
+                            <div className="col-span-2 sm:col-span-2 text-right">Сумма</div>
+                            <div className="col-span-3 sm:col-span-4 text-right">Площадка / Статус</div>
+                        </div>
+
+                        <div className="divide-y divide-brand-border/60">
+                            {filteredEvents.map((ev, i) => (
+                                <div key={i}
+                                     className="grid grid-cols-12 gap-4 items-center px-6 py-4 transition-colors hover:bg-brand-card/80 font-mono text-xs">
+                                    <div
+                                        className="col-span-4 sm:col-span-3 font-semibold text-brand-accent flex items-center gap-1.5">
+                                        <span className="text-ash/40">#</span>
+                                        {ev.tx}
+                                    </div>
+                                    <div
+                                        className="col-span-3 sm:col-span-3 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                        <span className="text-[#f1eee6] font-medium tracking-wider">@{ev.author}</span>
+                                        <span
+                                            className="rounded bg-brand-bg px-1.5 py-0.5 text-[10px] text-ash w-max border border-brand-border">{ev.geo}</span>
+                                    </div>
+                                    <div className="col-span-2 sm:col-span-2 text-right">
+                                        <div className="text-[#f1eee6] font-medium">${formatUsd(ev.amount)}</div>
+                                        <div className="text-ash/60 text-[10px]">{ev.views} просм.</div>
+                                    </div>
+                                    <div className="col-span-3 sm:col-span-4 flex items-center justify-end gap-3">
+                                        <span
+                                            className="hidden lg:inline-flex items-center gap-1 text-[10px] text-ash/70 bg-brand-bg px-2 py-0.5 rounded border border-brand-border">
+                                            <Video className="h-3 w-3 text-brand-accent"/>
+                                            {ev.node}
+                                        </span>
+                                        <span
+                                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold border border-brand-border bg-brand-bg ${
+                                                ev.status === 'SETTLED' ? 'text-brand-success' : ev.status === 'HOLD' ? 'text-brand-warning' : 'text-brand-accent'
+                                            }`}>
+                                            <span className={`h-1.5 w-1.5 rounded-full ${
+                                                ev.status === 'SETTLED' ? 'bg-brand-success' : ev.status === 'HOLD' ? 'bg-brand-warning' : 'bg-brand-accent animate-ping'
+                                            }`}/>
+                                            {ev.status}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div
+                            className="border-t border-brand-border bg-brand-bg/60 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs text-ash">
+                            <div className="flex items-center gap-2">
+                                <Activity className="h-4 w-4 text-brand-success animate-pulse"/>
+                                Трекинг просмотров видео работает в реальном времени
+                            </div>
+                            <div className="text-brand-accent flex items-center gap-1">
+                                <Lock className="h-3 w-3"/>
+                                Антифрод-фильтр активен
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* --- FAQ Block -------------------------------------------------------------------- */}
+                <section id="faq" className="scroll-mt-20 border-b border-brand-border/70 px-6 py-20 sm:px-12 lg:px-16">
+                    <div className="max-w-2xl mb-12">
+                        <SectionLabel>База знаний</SectionLabel>
+                        <h2 className="mt-5 font-display text-3xl uppercase leading-[0.95] tracking-tight text-[#f1eee6] sm:text-4xl">
+                            Часто задаваемые вопросы
+                        </h2>
+                        <p className="mt-4 text-sm text-ash">
+                            Всё, что нужно знать о работе с платформой, расчетах и безопасности.
+                        </p>
+                    </div>
+
+                    <div className="max-w-3xl space-y-4">
+                        {FAQ_ITEMS.map((item, index) => {
+                            const isOpen = openFaqIndex === index;
+                            return (
+                                <div
+                                    key={index}
+                                    className="rounded-xl border border-brand-border bg-brand-card/60 overflow-hidden transition-all"
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => setOpenFaqIndex(isOpen ? null : index)}
+                                        className="flex w-full items-center justify-between px-6 py-5 text-left transition-colors hover:bg-brand-card/80"
+                                    >
+                                        <span className="font-semibold text-sm sm:text-base text-[#f1eee6] pr-4">
+                                            {item.q}
+                                        </span>
+                                        <ChevronDown
+                                            className={`h-5 w-5 shrink-0 text-brand-accent transition-transform duration-200 ${
+                                                isOpen ? 'rotate-180' : ''
+                                            }`}
+                                        />
+                                    </button>
+                                    {isOpen && (
+                                        <div
+                                            className="px-6 pb-6 pt-2 text-sm text-ash leading-relaxed border-t border-brand-border/40 bg-brand-bg/40">
+                                            {item.a}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+
+                {/* --- Footer CTA ---------------------------------------------------------------------------- */}
+                <section className="px-6 py-20 sm:px-12 lg:px-16">
+                    <div
+                        className="max-w-3xl rounded-2xl border border-brand-border bg-brand-card/80 p-8 sm:p-12 relative overflow-hidden shadow-2xl">
+                        <div
+                            className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-brand-accent/10 blur-3xl pointer-events-none"/>
+                        <h2 className="font-display text-3xl uppercase leading-[0.95] tracking-tight text-[#f1eee6] sm:text-5xl">
+                            Готовы монетизировать видео-трафик без рисков?
+                        </h2>
+                        <p className="mt-4 max-w-xl text-sm sm:text-base text-ash leading-relaxed">
+                            Подключайтесь к {BRAND_NAME} прямо сейчас. Интеграция и запуск первой кампании занимают
+                            минимум времени.
                         </p>
 
-                        <div className="relative mt-8 flex flex-col items-center justify-center gap-3.5 sm:flex-row">
+                        <div className="mt-8 flex flex-col sm:flex-row gap-4">
                             <a
                                 href={botUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-accent px-8 py-4 text-sm font-bold text-brand-bg shadow-[0_0_40px_-10px_rgba(56,189,248,0.6)] transition-all hover:bg-brand-accentHover sm:w-auto"
+                                className="group flex items-center justify-center gap-2.5 rounded-lg bg-brand-accent px-8 py-4 text-sm font-semibold text-brand-bg shadow-lg shadow-brand-accent/20 transition-all hover:bg-brand-accentHover"
                             >
-                                <Send className="h-4 w-4" />
+                                <Send className="h-4 w-4"/>
                                 Открыть бота в Telegram
-                                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                                <ArrowUpRight
+                                    className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"/>
                             </a>
                         </div>
 
-                        <div className="relative mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] text-slate-500">
-                            <span className="inline-flex items-center gap-1.5">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-brand-success" />
-                                Без комиссии на вывод
+                        <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 font-mono text-xs text-ash">
+                            <span className="inline-flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-brand-success"/>
+                                Без скрытых комиссий
                             </span>
-                            <span className="inline-flex items-center gap-1.5">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-brand-success" />
-                                Выплаты в USDT TRC-20
+                            <span className="inline-flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-brand-success"/>
+                                USDT TRC-20 мгновенно
                             </span>
-                            <span className="inline-flex items-center gap-1.5">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-brand-success" />
-                                Поддержка 24/7
+                            <span className="inline-flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-brand-success"/>
+                                Персональный саппорт
                             </span>
                         </div>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            {/* --- Footer ------------------------------------------------------------------------------- */}
-            <footer className="relative border-t border-brand-border/60 py-10">
-                <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 sm:flex-row sm:px-8">
-                    <div className="flex items-center gap-2 text-sm font-bold text-white">
-                        <Video className="h-4 w-4 text-brand-accent" />
-                        UGC Flow
+                {/* --- Footer ------------------------------------------------------------------------------- */}
+                <footer className="border-t border-brand-border/80 bg-brand-bg">
+                    <MetricsTape dense/>
+                    <div
+                        className="flex flex-col items-center justify-between gap-6 px-6 py-10 sm:flex-row sm:px-12 lg:px-16">
+                        <div
+                            className="flex items-center gap-2.5 font-display text-base uppercase tracking-tight text-[#f1eee6]">
+                            <Workflow className="h-4 w-4 text-brand-accent"/>
+                            {BRAND_NAME}
+                        </div>
+                        <div
+                            className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 font-mono text-xs text-ash">
+                            <a href="#problem" onClick={scrollToId('problem')}
+                               className="transition-colors hover:text-[#f1eee6]">
+                                Архитектура
+                            </a>
+                            <a href="#telemetry" onClick={scrollToId('telemetry')}
+                               className="transition-colors hover:text-[#f1eee6]">
+                                Видео-потоки
+                            </a>
+                            <a href="#lifecycle" onClick={scrollToId('lifecycle')}
+                               className="transition-colors hover:text-[#f1eee6]">
+                                Пайплайн
+                            </a>
+                            <a href="#inspector" onClick={scrollToId('inspector')}
+                               className="transition-colors hover:text-[#f1eee6]">
+                                Live-инспектор
+                            </a>
+                            <a href="#faq" onClick={scrollToId('faq')}
+                               className="transition-colors hover:text-[#f1eee6]">
+                                FAQ
+                            </a>
+                            <a href={botUrl} target="_blank" rel="noopener noreferrer"
+                               className="transition-colors hover:text-[#f1eee6]">
+                                Telegram Bot
+                            </a>
+                            {onLoginClick && (
+                                <button type="button" onClick={onLoginClick}
+                                        className="transition-colors hover:text-[#f1eee6]">
+                                    Войти
+                                </button>
+                            )}
+                        </div>
+                        <div
+                            className="font-mono text-xs text-ash/70">© {new Date().getFullYear()} {BRAND_NAME} · {BRAND_DOMAIN}</div>
                     </div>
-                    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
-                        <a href="#audiences" onClick={scrollToId('audiences')} className="transition-colors hover:text-slate-300">
-                            О платформе
-                        </a>
-                        <a href={botUrl} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-slate-300">
-                            Telegram
-                        </a>
-                        <span>Поддержка — в боте, 24/7</span>
-                    </div>
-                    <div className="text-xs text-slate-600">© {new Date().getFullYear()} UGC Flow</div>
-                </div>
-            </footer>
+                </footer>
+            </div>
         </div>
     );
 }

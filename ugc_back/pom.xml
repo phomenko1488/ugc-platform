@@ -99,7 +99,6 @@
             <artifactId>jakarta.validation-api</artifactId>
             <version>3.1.1</version>
         </dependency>
-
         <!-- Jackson JSON Parser -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
